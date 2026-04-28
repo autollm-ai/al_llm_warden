@@ -1,0 +1,54 @@
+services:
+  warden-proxy:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: autollm/warden:latest
+    container_name: warden-proxy
+    command: ["warden-proxy"]
+    ports:
+      - "8080:8080"             # the HTTP/HTTPS proxy port
+    volumes:
+      - warden-data:/data       # SQLite event store
+      - warden-models:/models   # bpe.json + lstm.pt
+      - warden-mitm:/home/mitmproxy/.mitmproxy   # CA certificate
+    environment:
+      - WARDEN_DB=/data/warden.db
+      - WARDEN_MODEL_DIR=/models
+      - WARDEN_AUTOTRAIN=1
+      - WARDEN_TRAIN_SAMPLES=8000
+      - WARDEN_TRAIN_EPOCHS=4
+    user: "0:0"   # need write access to /home/mitmproxy/.mitmproxy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ls /home/mitmproxy/.mitmproxy/mitmproxy-ca-cert.pem >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  warden-api:
+    image: autollm/warden:latest
+    container_name: warden-api
+    command: ["warden-api"]
+    depends_on:
+      - warden-proxy
+    ports:
+      - "8090:8090"             # dashboard + JSON API
+    volumes:
+      - warden-data:/data
+      - warden-models:/models
+    environment:
+      - WARDEN_DB=/data/warden.db
+      - WARDEN_MODEL_DIR=/models
+      - WARDEN_FRONTEND_DIR=/app/frontend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8090/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  warden-data:
+  warden-models:
+  warden-mitm:

@@ -1,0 +1,13 @@
+.venv/
+.idea/
+__pycache__/
+**/__pycache__/
+*.pyc
+data/*.db
+data/*.db-journal
+models/*.pt
+models/*.json
+models/*.csv
+.DS_Store
+.env
+.env.local

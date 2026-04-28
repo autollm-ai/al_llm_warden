@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Warden — Outbound LLM Sensitivity Monitor</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=DM+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="nav-logo" href="/">
+        <img src="/static/favicon.png" alt="" class="nav-logo-img" />
+        <span>autollm <em>warden</em></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#dashboard">Dashboard</a></li>
+        <li><a href="#events">Events</a></li>
+        <li><a href="#test">Test</a></li>
+      </ul>
+      <div class="nav-actions">
+        <span id="proxy-status" class="badge badge-outline">Checking…</span>
+        <a class="btn btn-secondary btn-sm" href="https://github.com/" target="_blank" rel="noopener">Docs</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-pill">🛡️ <span>Local-only</span>&nbsp; Your data never leaves the laptop</div>
+      <h1>See what your LLMs are sending out.</h1>
+      <p>
+        A local proxy that scores every outbound request to ChatGPT, Claude, Gemini and
+        other shadow-AI tools — so you know what sensitive data is leaving your laptop, and where it's going.
+      </p>
+      <div class="hero-stats" id="hero-stats">
+        <div class="stat"><div class="stat-num" id="stat-total">—</div><div class="stat-label">events scanned</div></div>
+        <div class="stat"><div class="stat-num" id="stat-flagged">—</div><div class="stat-label">flagged sensitive</div></div>
+        <div class="stat"><div class="stat-num" id="stat-providers">—</div><div class="stat-label">distinct providers</div></div>
+        <div class="stat"><div class="stat-num" id="stat-bytes">—</div><div class="stat-label">bytes outbound</div></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="dashboard" class="section">
+      <div class="section-head">
+        <h2 class="section-title">Provider breakdown</h2>
+        <p class="section-desc">Where your outbound LLM traffic is going, and how sensitive it is.</p>
+      </div>
+      <div id="provider-grid" class="cards-grid"></div>
+    </section>
+
+    <section id="events" class="section">
+      <div class="section-head">
+        <h2 class="section-title">Recent events</h2>
+        <p class="section-desc">Each row is a single outbound request the proxy intercepted and scored.</p>
+      </div>
+      <div class="filters">
+        <select id="filter-provider"><option value="">All providers</option></select>
+        <select id="filter-sensitivity">
+          <option value="">All sensitivity</option>
+          <option value="0.15">Low+</option>
+          <option value="0.40">Medium+</option>
+          <option value="0.65">High+</option>
+          <option value="0.85">Critical only</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="refresh-btn">Refresh</button>
+      </div>
+      <div class="event-table-wrap">
+        <table class="event-table">
+          <thead>
+            <tr>
+              <th>Time</th><th>Provider</th><th>Method</th><th>Path</th>
+              <th>Sensitivity</th><th>Categories</th><th>Summary</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="event-tbody"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="test" class="section">
+      <div class="section-head">
+        <h2 class="section-title">Try the classifier</h2>
+        <p class="section-desc">Paste a snippet to see what the regex + LSTM pipeline says about it.</p>
+      </div>
+      <div class="test-card">
+        <textarea id="test-text" rows="6" placeholder="Paste any text — emails, code, notes — to score it locally."></textarea>
+        <div class="test-actions">
+          <button class="btn btn-primary btn-md" id="test-run">Classify</button>
+          <span class="test-hint">Runs locally, never leaves your machine.</span>
+        </div>
+        <pre id="test-result" class="copy-block" hidden></pre>
+      </div>
+    </section>
+  </main>
+
+  <!-- Event detail modal -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-panel">
+      <button class="modal-close" id="modal-close" aria-label="Close">×</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>autollm warden · runs entirely on localhost</span>
+      <span class="mono" id="api-info"></span>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
