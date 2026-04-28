@@ -75,7 +75,14 @@ async function loadSummary() {
   if (!s.by_provider || s.by_provider.length === 0) {
     grid.innerHTML = `<div class="empty-state">
       <strong>No traffic yet.</strong><br/>
-      Point your LLM client at <code>http://localhost:8080</code> and start chatting.
+      Run the one-line installer once, then open
+      <a href="https://chatgpt.com" target="_blank" rel="noopener">chatgpt.com</a>,
+      <a href="https://claude.ai" target="_blank" rel="noopener">claude.ai</a>,
+      or any other LLM tool. Events will appear here automatically.
+      <pre style="margin-top: var(--sp-4); background: var(--mp-near-black); color: #e0e0e0; border-radius: var(--r-md); padding: 14px 16px; font-family: var(--font-mono); font-size: 12px; overflow-x: auto; text-align: left;">bash scripts/install-mac.sh</pre>
+      <span style="display:block; margin-top: 8px; color: var(--mp-text-tertiary); font-size: 12px;">
+        Trusts the certificate, flips the macOS system proxy, and verifies the path. Reverse with <code>scripts/uninstall-mac.sh</code>.
+      </span>
     </div>`;
     return;
   }

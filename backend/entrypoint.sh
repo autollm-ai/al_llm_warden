@@ -21,11 +21,17 @@ case "${1:-warden-proxy}" in
         --epochs    "${WARDEN_TRAIN_EPOCHS:-4}" \
       || echo "[entrypoint] training failed — proxy will run with tier-1 only"
     fi
-    echo "[entrypoint] starting mitmdump on 0.0.0.0:8080"
+    # Pin the mitmproxy config dir so the CA always lands at a known path
+    # regardless of which user the container is running as. The healthcheck
+    # and `docker cp` instructions both assume this exact location.
+    export MITM_CONFDIR=/home/mitmproxy/.mitmproxy
+    mkdir -p "$MITM_CONFDIR"
+    echo "[entrypoint] starting mitmdump on 0.0.0.0:8080  (confdir=$MITM_CONFDIR)"
     exec mitmdump \
       -s /app/proxy/addon.py \
       --listen-host 0.0.0.0 \
       --listen-port 8080 \
+      --set "confdir=$MITM_CONFDIR" \
       --set "block_global=false"
     ;;
   warden-api)

@@ -21,28 +21,54 @@ purple accent, off-white surfaces — and uses the
 
 ---
 
-## Quick start (3 minutes)
+## Quick start — macOS, two commands
 
 You need Docker Desktop (or Colima / Orbstack) and `git`. That's it.
 
 ```bash
 git clone <this-repo> al_llm_warden
 cd al_llm_warden
-docker compose up --build
+docker compose up -d --build              # boots warden in the background
+bash scripts/install-mac.sh               # trusts the CA + flips the macOS proxy
 ```
 
-The first start takes a few minutes — it generates 8 000 synthetic training
-samples, trains the BPE tokenizer, and trains the LSTM. Subsequent starts
-are instant (the model is cached in a named volume).
+That's it. Now open `chatgpt.com`, `claude.ai`, `gemini.google.com`, or any
+LLM tool in your normal browser — events appear at
+<http://localhost:8090>. Nothing else to configure.
 
-When it boots you'll see two services:
+To revert (turn the proxy off, remove the certificate):
+
+```bash
+bash scripts/uninstall-mac.sh
+docker compose down                       # add -v to also wipe the SQLite + model volumes
+```
+
+What `install-mac.sh` does, in order:
+
+1. Waits for `warden-proxy` to be healthy.
+2. Pulls `mitmproxy-ca-cert.pem` out of the container.
+3. Trusts that CA in the macOS System keychain (1 sudo prompt).
+4. Sets the system-wide HTTP+HTTPS proxy to `127.0.0.1:8080`, with a
+   localhost bypass so the dashboard isn't proxied.
+5. Verifies the proxy is in the path with a real HTTPS request.
+
+When `docker compose up` boots for the first time it generates synthetic
+training data and trains the BPE tokenizer + LSTM (a few minutes on CPU).
+Subsequent starts are instant — the model is cached in a named volume. If
+you ship a pre-trained `models/lstm.pt` + `models/bpe.json` in the repo,
+training is skipped entirely on first boot.
+
+Two services run inside the stack:
 
 | Service       | URL                       | What it does                              |
 | ------------- | ------------------------- | ----------------------------------------- |
-| `warden-proxy`| `http://localhost:8080`   | mitmproxy listener — set this as `HTTPS_PROXY` |
-| `warden-api`  | `http://localhost:8090`   | Dashboard + JSON API                       |
+| `warden-proxy`| `http://localhost:8080`   | mitmproxy listener (the system proxy points here) |
+| `warden-api`  | `http://localhost:8090`   | Dashboard + JSON API — open this in your browser |
 
-Open <http://localhost:8090> for the dashboard.
+> **Linux users:** the manual steps below still apply — set `HTTP_PROXY`
+> / `HTTPS_PROXY` system-wide via your DE settings (or `gsettings set
+> org.gnome.system.proxy mode 'manual'`) and trust the CA via
+> `update-ca-certificates`.
 
 ---
 
