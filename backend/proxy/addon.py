@@ -85,7 +85,7 @@ class Warden:
         # Tag the request for validation.
         flow.request.headers["X-Warden-Scanned"] = "1"
         flow.request.headers["X-Warden-Label"] = result.label
-        flow.request.metadata["warden_event_id"] = event_id
+        flow.metadata["warden_event_id"] = event_id  # metadata lives on the flow
 
     def response(self, flow: http.HTTPFlow) -> None:
         # Echo confirmation back to the client too — useful for the validator.

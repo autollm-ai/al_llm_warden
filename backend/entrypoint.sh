@@ -27,12 +27,19 @@ case "${1:-warden-proxy}" in
     export MITM_CONFDIR=/home/mitmproxy/.mitmproxy
     mkdir -p "$MITM_CONFDIR"
     echo "[entrypoint] starting mitmdump on 0.0.0.0:8080  (confdir=$MITM_CONFDIR)"
+    # --ssl-insecure: skip *upstream* cert verification (mitmdump → server).
+    # We are an observer, not a security boundary — when a stale CA bundle in
+    # the container can't verify Cloudflare's chain, we shouldn't break the
+    # user's traffic. The CLIENT-side TLS (browser → mitmdump) is still
+    # signed by our own CA which the user trusted explicitly.
     exec mitmdump \
       -s /app/proxy/addon.py \
       --listen-host 0.0.0.0 \
       --listen-port 8080 \
       --set "confdir=$MITM_CONFDIR" \
-      --set "block_global=false"
+      --set "block_global=false" \
+      --set "connection_strategy=lazy" \
+      --ssl-insecure
     ;;
   warden-api)
     echo "[entrypoint] starting FastAPI on 0.0.0.0:8090"

@@ -10,7 +10,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates tini \
+ && update-ca-certificates \
  && rm -rf /var/lib/apt/lists/*
+
+# Make Python / certifi use the system CA bundle instead of the wheel's
+# bundled (potentially stale) one. Lets mitmproxy verify upstream certs
+# against current Mozilla roots.
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 WORKDIR /app
 
