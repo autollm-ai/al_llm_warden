@@ -5,6 +5,11 @@ __pycache__/
 **/__pycache__/
 *.pyc
 data/
-models/
 .DS_Store
 node_modules/
+
+# Ship only the small inference artifacts; never bake the heavy training-only
+# files into the image.
+models/training_data.csv
+models/tokenized_cache.pt
+models/*_oldarch.*

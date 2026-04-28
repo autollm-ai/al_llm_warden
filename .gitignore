@@ -8,6 +8,12 @@ data/*.db-journal
 #models/*.pt
 #models/*.json
 #models/*.csv
+
+models/lstm_oldarch.pt
+models/metrics_oldarch.json
+models/tokenized_cache.pt
+models/training_data.csv
+
 .DS_Store
 .env
 .env.local

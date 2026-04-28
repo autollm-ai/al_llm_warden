@@ -35,6 +35,13 @@ RUN chmod +x /app/entrypoint.sh
 
 COPY frontend          /app/frontend
 
+# Pre-trained weights, if committed to the repo. On first `docker compose
+# up`, Docker seeds the empty `warden-models` named volume from /models in
+# the image — so end users get a working model instantly and the autotrain
+# branch in entrypoint.sh is skipped.  Failing this COPY is fine (the *
+# glob won't error if files are absent), it just means autotrain runs.
+COPY models/ /models/
+
 VOLUME ["/data", "/models"]
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
