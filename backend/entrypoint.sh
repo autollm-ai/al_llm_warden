@@ -26,12 +26,37 @@ case "${1:-warden-proxy}" in
     # and `docker cp` instructions both assume this exact location.
     export MITM_CONFDIR=/home/mitmproxy/.mitmproxy
     mkdir -p "$MITM_CONFDIR"
+
+    # Build an allow-list regex from warden.domains.SHADOW_AI_DOMAINS so that
+    # only LLM endpoints get MITM'd. Everything else (Google services,
+    # Apple/Microsoft telemetry, CDN assets) gets a transparent CONNECT
+    # tunnel — fixes 502s on long-poll endpoints and dramatically reduces
+    # the surface area for proxy weirdness.
+    # Match each registered host AND any of its subdomains, so e.g.
+    # `eu.api.openai.com` is intercepted alongside `api.openai.com`.
+    # Anything not matching this regex bypasses MITM entirely (transparent
+    # CONNECT tunnel) — non-shadow-AI traffic passes through as-is.
+    ALLOW_HOSTS=$(python -c "
+import re, sys
+sys.path.insert(0, '/app')
+from warden.domains import SHADOW_AI_DOMAINS
+hosts = sorted(set(SHADOW_AI_DOMAINS.keys()))
+parts = [r'(?:[a-z0-9-]+\.)*' + re.escape(h) for h in hosts]
+print(r'^(' + '|'.join(parts) + r')(:\d+)?$')
+")
     echo "[entrypoint] starting mitmdump on 0.0.0.0:8080  (confdir=$MITM_CONFDIR)"
+    echo "[entrypoint] allow-hosts regex: $ALLOW_HOSTS"
     # --ssl-insecure: skip *upstream* cert verification (mitmdump → server).
-    # We are an observer, not a security boundary — when a stale CA bundle in
-    # the container can't verify Cloudflare's chain, we shouldn't break the
-    # user's traffic. The CLIENT-side TLS (browser → mitmdump) is still
-    # signed by our own CA which the user trusted explicitly.
+    #   We are an observer, not a security boundary — when a stale CA bundle
+    #   in the container can't verify Cloudflare's chain, we shouldn't break
+    #   the user's traffic. The CLIENT-side TLS (browser → mitmdump) is still
+    #   signed by our own CA which the user trusted explicitly.
+    # --set stream_large_bodies=1
+    #   Stream responses ≥1 byte directly through to the client instead of
+    #   buffering the whole thing — required for chatgpt.com / claude.ai
+    #   Server-Sent Events to render token-by-token.
+    # --allow-hosts
+    #   Only MITM LLM domains. Pass everything else through as plain CONNECT.
     exec mitmdump \
       -s /app/proxy/addon.py \
       --listen-host 0.0.0.0 \
@@ -39,6 +64,8 @@ case "${1:-warden-proxy}" in
       --set "confdir=$MITM_CONFDIR" \
       --set "block_global=false" \
       --set "connection_strategy=lazy" \
+      --set "stream_large_bodies=1" \
+      --set "allow_hosts=$ALLOW_HOSTS" \
       --ssl-insecure
     ;;
   warden-api)

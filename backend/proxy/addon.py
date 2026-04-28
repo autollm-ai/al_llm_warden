@@ -82,17 +82,18 @@ class Warden:
             log.warning("Event insert failed: %s", e)
             event_id = -1
 
-        # Tag the request for validation.
-        flow.request.headers["X-Warden-Scanned"] = "1"
-        flow.request.headers["X-Warden-Label"] = result.label
+        # Tag the request for validation. Lowercase header names so HTTP/2
+        # accepts them without normalisation warnings.
+        flow.request.headers["x-warden-scanned"] = "1"
+        flow.request.headers["x-warden-label"] = result.label
         flow.metadata["warden_event_id"] = event_id  # metadata lives on the flow
 
     def response(self, flow: http.HTTPFlow) -> None:
         # Echo confirmation back to the client too — useful for the validator.
-        if "X-Warden-Scanned" in flow.request.headers and flow.response is not None:
-            flow.response.headers["X-Warden-Scanned"] = "1"
-            label = flow.request.headers.get("X-Warden-Label", "clean")
-            flow.response.headers["X-Warden-Label"] = label
+        if "x-warden-scanned" in flow.request.headers and flow.response is not None:
+            flow.response.headers["x-warden-scanned"] = "1"
+            label = flow.request.headers.get("x-warden-label", "clean")
+            flow.response.headers["x-warden-label"] = label
 
 
 def _flatten_payload(text: str, content_type: str) -> str:
