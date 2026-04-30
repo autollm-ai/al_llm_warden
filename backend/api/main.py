@@ -8,12 +8,16 @@ POST /api/classify         — ad-hoc classification (used by the validator)
 """
 from __future__ import annotations
 
+import csv
+import io
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -65,6 +69,68 @@ def events(
         limit=limit, offset=offset, provider=provider, min_sensitivity=min_sensitivity
     )
     return {"events": rows, "limit": limit, "offset": offset}
+
+
+@app.get("/api/events.csv")
+def events_csv(
+    min_sensitivity: float = Query(0.15, ge=0.0, le=1.0),
+    provider: str | None = None,
+    label: str | None = Query(None, description="exact label filter, e.g. 'low,medium,high,critical'"),
+    limit: int = Query(10000, ge=1, le=100000),
+) -> StreamingResponse:
+    """Stream flagged events as CSV. Defaults to anything not 'clean'
+    (sensitivity ≥ 0.15) so it's a one-click false-positive audit dump."""
+    rows = _store.list_events(
+        limit=limit, offset=0, provider=provider, min_sensitivity=min_sensitivity
+    )
+    if label:
+        wanted = {x.strip() for x in label.split(",") if x.strip()}
+        rows = [r for r in rows if r.get("label") in wanted]
+
+    cols = [
+        "id", "ts", "provider", "host", "method", "path",
+        "label", "sensitivity", "tier1_score", "tier2_score",
+        "categories", "hit_names", "hit_categories",
+        "summary", "bytes_out", "sample",
+    ]
+
+    def gen():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(cols)
+        yield buf.getvalue(); buf.seek(0); buf.truncate()
+        for r in rows:
+            hits = r.get("hits") or []
+            hit_names = ";".join(h.get("name", "") for h in hits if isinstance(h, dict))
+            hit_categories = ";".join(h.get("category", "") for h in hits if isinstance(h, dict))
+            cats = r.get("categories") or []
+            writer.writerow([
+                r.get("id", ""),
+                r.get("ts", ""),
+                r.get("provider", ""),
+                r.get("host", ""),
+                r.get("method", ""),
+                r.get("path", ""),
+                r.get("label", ""),
+                f"{float(r.get('sensitivity') or 0):.4f}",
+                f"{float(r.get('tier1_score') or 0):.4f}",
+                f"{float(r.get('tier2_score') or 0):.4f}",
+                ";".join(cats) if isinstance(cats, list) else json.dumps(cats),
+                hit_names,
+                hit_categories,
+                r.get("summary", ""),
+                r.get("bytes_out", ""),
+                r.get("sample", ""),
+            ])
+            yield buf.getvalue(); buf.seek(0); buf.truncate()
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+    fname = f"warden-flagged-{stamp}.csv"
+    return StreamingResponse(
+        gen(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 @app.get("/api/events/{event_id}")

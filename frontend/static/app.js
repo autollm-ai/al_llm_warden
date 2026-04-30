@@ -233,6 +233,19 @@ $("#refresh-btn").addEventListener("click", refresh);
 $("#filter-provider").addEventListener("change", loadEvents);
 $("#filter-sensitivity").addEventListener("change", loadEvents);
 
+// Keep the CSV export URL in sync with the active filters so users download
+// exactly what they see on screen.
+function updateExportHref() {
+  const provider = $("#filter-provider").value;
+  const minSens  = $("#filter-sensitivity").value || "0.15";
+  const params = new URLSearchParams({ limit: "10000", min_sensitivity: minSens });
+  if (provider) params.set("provider", provider);
+  $("#export-csv").href = `/api/events.csv?${params}`;
+}
+$("#filter-provider").addEventListener("change", updateExportHref);
+$("#filter-sensitivity").addEventListener("change", updateExportHref);
+updateExportHref();
+
 // ── HELPERS ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(s) {
