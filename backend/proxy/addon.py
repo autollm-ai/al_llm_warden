@@ -41,6 +41,30 @@ class Warden:
             self.classifier.model is not None,
         )
 
+    # ─── streaming control ────────────────────────────────────────────────
+    # mitmdump runs with --set stream_large_bodies=… so SSE responses (chatgpt
+    # token-by-token, claude.ai, gemini) pass through without buffering.
+    # That same setting would silently drop the *request* body for the same
+    # flows, leaving the classifier with nothing to score. The two hooks
+    # below override per-flow:
+    #   • requestheaders → force request body to BUFFER (so we can read it).
+    #   • responseheaders → force response body to STREAM (so SSE still works).
+    def requestheaders(self, flow: http.HTTPFlow) -> None:
+        if lookup_provider(flow.request.pretty_host) is not None:
+            flow.request.stream = False
+
+    def responseheaders(self, flow: http.HTTPFlow) -> None:
+        if lookup_provider(flow.request.pretty_host) is None:
+            return
+        if flow.response is None:
+            return
+        ctype = (flow.response.headers.get("content-type") or "").lower()
+        accept = (flow.request.headers.get("accept") or "").lower()
+        is_sse = "text/event-stream" in ctype or "text/event-stream" in accept
+        is_chunked = (flow.response.headers.get("transfer-encoding") or "").lower() == "chunked"
+        if is_sse or is_chunked:
+            flow.response.stream = True
+
     def request(self, flow: http.HTTPFlow) -> None:
         host = flow.request.pretty_host
         provider = lookup_provider(host)

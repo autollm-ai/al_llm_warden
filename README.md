@@ -21,15 +21,27 @@ purple accent, off-white surfaces — and uses the
 
 ---
 
-## Quick start — macOS, two commands
+## Quick start — two commands
 
-You need Docker Desktop (or Colima / Orbstack) and `git`. That's it.
+You need Docker (Docker Desktop / Colima / Orbstack on macOS, or Docker
+Engine + the compose plugin on Linux) and `git`. That's it.
+
+**macOS:**
 
 ```bash
 git clone <this-repo> al_llm_warden
 cd al_llm_warden
 docker compose up -d --build              # boots warden in the background
 bash scripts/install-mac.sh               # trusts the CA + flips the macOS proxy
+```
+
+**Linux** (Ubuntu/Debian, Fedora/RHEL, Arch, openSUSE):
+
+```bash
+git clone <this-repo> al_llm_warden
+cd al_llm_warden
+docker compose up -d --build              # boots warden in the background
+bash scripts/install-linux.sh             # trusts the CA + flips the GNOME proxy
 ```
 
 That's it. Now open `chatgpt.com`, `claude.ai`, `gemini.google.com`, or any
@@ -39,7 +51,8 @@ LLM tool in your normal browser — events appear at
 To revert (turn the proxy off, remove the certificate):
 
 ```bash
-bash scripts/uninstall-mac.sh
+bash scripts/uninstall-mac.sh             # macOS
+bash scripts/uninstall-linux.sh           # Linux
 docker compose down                       # add -v to also wipe the SQLite + model volumes
 ```
 
@@ -51,6 +64,31 @@ What `install-mac.sh` does, in order:
 4. Sets the system-wide HTTP+HTTPS proxy to `127.0.0.1:8080`, with a
    localhost bypass so the dashboard isn't proxied.
 5. Verifies the proxy is in the path with a real HTTPS request.
+
+What `install-linux.sh` does, in order:
+
+1. Waits for `warden-proxy` to be healthy.
+2. Pulls `mitmproxy-ca-cert.pem` out of the container.
+3. Installs the CA into the system trust store via the right tool for
+   your distro (`update-ca-certificates`, `update-ca-trust`, or
+   `trust extract-compat`).
+4. Auto-installs `libnss3-tools` (or your distro's equivalent) if
+   needed — Chrome and Firefox on Linux read their own per-user NSS DB,
+   *not* the system trust store, so this is required.
+5. Adds the CA to that NSS DB plus any Firefox profiles (system path,
+   Snap path, and Snap Chromium / Snap google-chrome paths) so the
+   browser accepts it without a manual import.
+6. On GNOME, sets `org.gnome.system.proxy` to `manual` →
+   `127.0.0.1:8080` with a localhost bypass. On other desktops it
+   prints the env-var lines to add to your shell rc.
+7. Verifies the proxy is in the path with a real HTTPS request.
+
+If you ran the installer under `sudo`, the script automatically routes
+the GNOME-proxy and NSS-DB steps to `$SUDO_USER`'s session/home — so you
+get the same result as running it as your normal user. **You must fully
+quit Chrome (`pkill -f 'chrome|chromium'`) before reopening** — Chrome
+caches the NSS trust DB at process start and a backgrounded helper will
+keep stale state pinned across window reopens.
 
 When `docker compose up` boots for the first time it generates synthetic
 training data and trains the BPE tokenizer + LSTM (a few minutes on CPU).
@@ -65,10 +103,10 @@ Two services run inside the stack:
 | `warden-proxy`| `http://localhost:8080`   | mitmproxy listener (the system proxy points here) |
 | `warden-api`  | `http://localhost:8090`   | Dashboard + JSON API — open this in your browser |
 
-> **Linux users:** the manual steps below still apply — set `HTTP_PROXY`
-> / `HTTPS_PROXY` system-wide via your DE settings (or `gsettings set
-> org.gnome.system.proxy mode 'manual'`) and trust the CA via
-> `update-ca-certificates`.
+> **Non-GNOME Linux:** `install-linux.sh` still installs the CA system-
+> wide and into the NSS DB; the system-proxy step is skipped and the
+> script prints the `HTTP_PROXY` / `HTTPS_PROXY` env vars to add to your
+> shell rc (or your DE's network panel) so CLIs and GUI apps pick it up.
 
 ---
 
@@ -92,8 +130,29 @@ sudo security add-trusted-cert -d -r trustRoot \
 
 **Linux (Ubuntu/Debian):**
 ```bash
-sudo cp ./mitmproxy-ca.pem /usr/local/share/ca-certificates/mitmproxy-ca.crt
+sudo cp ./mitmproxy-ca.pem /usr/local/share/ca-certificates/warden-mitmproxy.crt
 sudo update-ca-certificates
+```
+
+**Linux (Fedora/RHEL):**
+```bash
+sudo cp ./mitmproxy-ca.pem /etc/pki/ca-trust/source/anchors/warden-mitmproxy.crt
+sudo update-ca-trust extract
+```
+
+**Linux (Arch):**
+```bash
+sudo cp ./mitmproxy-ca.pem /etc/ca-certificates/trust-source/anchors/warden-mitmproxy.crt
+sudo trust extract-compat
+```
+
+Chrome / Chromium / Firefox on Linux read from a **per-user NSS DB**, not
+the system store, so add the CA there too (`scripts/install-linux.sh` does
+this for you when `libnss3-tools` is installed):
+
+```bash
+mkdir -p ~/.pki/nssdb
+certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n warden-mitmproxy -i ./mitmproxy-ca.pem
 ```
 
 **Python tools** also respect `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE`:
@@ -307,6 +366,11 @@ docker cp warden-proxy:/models/training_data.csv ./training_data.csv
 │       ├── app.js
 │       └── favicon.png         # autollm.ai mark
 └── scripts/
+    ├── install-mac.sh          # macOS: trust CA + flip system proxy
+    ├── uninstall-mac.sh        # macOS: revert install-mac.sh
+    ├── install-linux.sh        # Linux: trust CA + flip GNOME / env-var proxy
+    ├── uninstall-linux.sh      # Linux: revert install-linux.sh
+    ├── eval_threshold.py       # sweep classifier thresholds against held-out data
     └── validate_proxy.py       # health-check + interception verifier
 ```
 

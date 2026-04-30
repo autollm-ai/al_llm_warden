@@ -51,10 +51,14 @@ print(r'^(' + '|'.join(parts) + r')(:\d+)?$')
     #   in the container can't verify Cloudflare's chain, we shouldn't break
     #   the user's traffic. The CLIENT-side TLS (browser → mitmdump) is still
     #   signed by our own CA which the user trusted explicitly.
-    # --set stream_large_bodies=1
-    #   Stream responses ≥1 byte directly through to the client instead of
-    #   buffering the whole thing — required for chatgpt.com / claude.ai
-    #   Server-Sent Events to render token-by-token.
+    # --set stream_large_bodies=5m
+    #   Don't blanket-stream every body. The addon's `requestheaders`
+    #   hook explicitly buffers request bodies (so we can classify them)
+    #   and the `responseheaders` hook explicitly streams SSE / chunked
+    #   responses (so chatgpt.com / claude.ai render token-by-token).
+    #   The 5m floor is just an upper bound for anything the addon
+    #   doesn't override — bodies that big are almost always file uploads
+    #   we'd hash-skip anyway.
     # --allow-hosts
     #   Only MITM LLM domains. Pass everything else through as plain CONNECT.
     exec mitmdump \
@@ -64,7 +68,7 @@ print(r'^(' + '|'.join(parts) + r')(:\d+)?$')
       --set "confdir=$MITM_CONFDIR" \
       --set "block_global=false" \
       --set "connection_strategy=lazy" \
-      --set "stream_large_bodies=1" \
+      --set "stream_large_bodies=5m" \
       --set "allow_hosts=$ALLOW_HOSTS" \
       --ssl-insecure
     ;;

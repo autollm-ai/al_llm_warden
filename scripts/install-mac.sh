@@ -33,7 +33,7 @@ fail()  { printf "  %b %s\n" "$FAIL" "$*" >&2; exit 1; }
 warn()  { printf "  %b %s\n" "$WARN" "$*"; }
 note()  { printf "  ${DIM}%s${END}\n" "$*"; }
 
-[ "$(uname -s)" = "Darwin" ] || fail "This installer is for macOS. On Linux, see README.md (Linux section)."
+[ "$(uname -s)" = "Darwin" ] || fail "This installer is for macOS. On Linux, run scripts/install-linux.sh."
 command -v docker >/dev/null   || fail "Docker not found. Install Docker Desktop or Colima first."
 command -v networksetup >/dev/null || fail "networksetup not found — are you on macOS?"
 
