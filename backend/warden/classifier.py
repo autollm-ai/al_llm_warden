@@ -178,24 +178,37 @@ class Classifier:
         )
 
     def _apply_identity_exemption(self, hits):
-        """Observe identity hits and demote any user-owned values."""
+        """Observe identity hits, then demote only the top-K values per
+        kind (1 email, 2 IPs). Anything else that crosses THRESHOLD is
+        treated as a leak — multiple emails recurring is more likely to
+        be other people's data than a second user identity.
+        """
         if self.identity is None:
             return hits
-        out = []
+        # First pass: observe every identity-kind hit so threshold-
+        # crossing values qualify within the same turn.
         for h in hits:
             kind = KIND_FOR_HIT.get(h.name)
             if kind and h.raw:
                 try:
                     self.identity.observe(kind, h.raw)
-                    if self.identity.is_user_owned(kind, h.raw):
-                        out.append(replace(
-                            h,
-                            category="user_identity",
-                            weight=0.05,
-                        ))
-                        continue
                 except Exception as e:
-                    log.warning("identity exemption failed: %s", e)
+                    log.warning("identity observe failed: %s", e)
+        # Single fetch of the qualified set per kind, post-observe.
+        try:
+            qualified = self.identity.qualified_set()
+        except Exception as e:
+            log.warning("identity qualified_set failed: %s", e)
+            return hits
+        # Second pass: demote only values present in the qualified set.
+        out = []
+        for h in hits:
+            kind = KIND_FOR_HIT.get(h.name)
+            if kind and h.raw:
+                norm = h.raw.strip().lower() if kind == "email" else h.raw.strip()
+                if norm in qualified.get(kind, ()):
+                    out.append(replace(h, category="user_identity", weight=0.05))
+                    continue
             out.append(h)
         return out
 

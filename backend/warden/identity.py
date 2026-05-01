@@ -25,6 +25,11 @@ from datetime import datetime, timedelta, timezone
 THRESHOLD = int(os.environ.get("WARDEN_IDENTITY_THRESHOLD", "5"))
 # Recurrences must fall within this trailing window.
 DECAY_HOURS = int(os.environ.get("WARDEN_IDENTITY_DECAY_HOURS", "24"))
+# A user has at most one login email and one or two outbound IPs (home
+# + mobile/work, or v4 + v6). Anything above the cap stays flagged as
+# PII even if it crosses THRESHOLD — multiple emails crossing threshold
+# is more likely to be other people's data leaking through.
+MAX_PER_KIND: dict[str, int] = {"email": 1, "ip": 2}
 
 _DEFAULT_PATH = os.environ.get("WARDEN_DB", "/data/warden.db")
 
@@ -95,22 +100,33 @@ class IdentityMemory:
             )
             c.commit()
 
+    def qualified(self, kind: str) -> list[str]:
+        """Return the top-N most-frequent values of `kind` that have
+        crossed THRESHOLD in the trailing window. N is capped per kind by
+        MAX_PER_KIND so the user-identity slot can't expand indefinitely
+        — at most one email, at most two IPs."""
+        cap = MAX_PER_KIND.get(kind, 1)
+        cutoff = _cutoff_iso()
+        with self._lock, self._connect() as c:
+            rows = c.execute(
+                """SELECT value FROM identity_signals
+                   WHERE kind=? AND count >= ? AND last_seen >= ?
+                   ORDER BY count DESC, last_seen DESC
+                   LIMIT ?""",
+                (kind, THRESHOLD, cutoff, cap),
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def qualified_set(self) -> dict[str, set[str]]:
+        """One-shot fetch of qualified values for every capped kind.
+        Use this when classifying a single request so we don't issue a
+        SELECT per hit."""
+        return {kind: set(self.qualified(kind)) for kind in MAX_PER_KIND}
+
     def is_user_owned(self, kind: str, value: str) -> bool:
         if not value:
             return False
-        v = _norm(kind, value)
-        cutoff = _cutoff_iso()
-        with self._lock, self._connect() as c:
-            row = c.execute(
-                "SELECT count, last_seen FROM identity_signals WHERE kind=? AND value=?",
-                (kind, v),
-            ).fetchone()
-        if not row:
-            return False
-        count, last_seen = row
-        if last_seen < cutoff:
-            return False
-        return count >= THRESHOLD
+        return _norm(kind, value) in self.qualified(kind)
 
     def forget(self, kind: str, value: str) -> bool:
         """Remove a (kind, value) pair so it stops being treated as
@@ -127,17 +143,21 @@ class IdentityMemory:
             return cur.rowcount > 0
 
     def known(self) -> list[dict]:
-        """Qualified user-owned values for the dashboard."""
+        """Qualified user-owned values for the dashboard. Honors the
+        per-kind cap so the API matches what's actually being exempted."""
         cutoff = _cutoff_iso()
+        out: list[dict] = []
         with self._lock, self._connect() as c:
-            rows = c.execute(
-                """SELECT kind, value, count, first_seen, last_seen
-                   FROM identity_signals
-                   WHERE count >= ? AND last_seen >= ?
-                   ORDER BY count DESC""",
-                (THRESHOLD, cutoff),
-            ).fetchall()
-        return [
-            {"kind": k, "value": v, "count": n, "first_seen": fs, "last_seen": ls}
-            for (k, v, n, fs, ls) in rows
-        ]
+            for kind, cap in MAX_PER_KIND.items():
+                rows = c.execute(
+                    """SELECT kind, value, count, first_seen, last_seen
+                       FROM identity_signals
+                       WHERE kind=? AND count >= ? AND last_seen >= ?
+                       ORDER BY count DESC, last_seen DESC
+                       LIMIT ?""",
+                    (kind, THRESHOLD, cutoff, cap),
+                ).fetchall()
+                for (k, v, n, fs, ls) in rows:
+                    out.append({"kind": k, "value": v, "count": n,
+                                "first_seen": fs, "last_seen": ls})
+        return out

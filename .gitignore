@@ -17,3 +17,5 @@ models/training_data.csv
 .DS_Store
 .env
 .env.local
+
+mitmproxy-ca.pem
