@@ -18,6 +18,10 @@ services:
       - WARDEN_AUTOTRAIN=1
       - WARDEN_TRAIN_SAMPLES=8000
       - WARDEN_TRAIN_EPOCHS=4
+      # Set to 1 to dump full request bodies to /data/warden-test-mode.jsonl
+      # for offline analysis / model training. Off by default.
+      - WARDEN_TEST_MODE=${WARDEN_TEST_MODE:-0}
+      - WARDEN_TEST_MODE_PATH=/data/warden-test-mode.jsonl
     user: "0:0"   # need write access to /home/mitmproxy/.mitmproxy
     restart: unless-stopped
     healthcheck:
@@ -41,6 +45,8 @@ services:
       - WARDEN_DB=/data/warden.db
       - WARDEN_MODEL_DIR=/models
       - WARDEN_FRONTEND_DIR=/app/frontend
+      - WARDEN_TEST_MODE=${WARDEN_TEST_MODE:-0}
+      - WARDEN_TEST_MODE_PATH=/data/warden-test-mode.jsonl
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8090/api/health"]

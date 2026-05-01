@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from warden import classifier as _cls
 from warden.database import EventStore
+from warden.identity import IdentityMemory
 
 app = FastAPI(title="LLM Warden", version="0.1.0")
 
@@ -34,14 +35,73 @@ app.add_middleware(
 )
 
 _store = EventStore()
+_identity = IdentityMemory()
 _tok_path, _model_path = _cls.default_paths()
 _classifier = _cls.Classifier.from_paths(_tok_path, _model_path)
 
 _FRONTEND_DIR = Path(os.environ.get("WARDEN_FRONTEND_DIR", "/app/frontend"))
 
+_TEST_MODE = os.environ.get("WARDEN_TEST_MODE", "0").lower() in ("1", "true", "yes", "on")
+_TEST_MODE_PATH = Path(os.environ.get("WARDEN_TEST_MODE_PATH", "/data/warden-test-mode.jsonl"))
+
 
 class ClassifyBody(BaseModel):
     text: str
+
+
+@app.get("/api/test-mode")
+def test_mode_status() -> dict:
+    """Test-mode capture state + file size, so the UI can show the link."""
+    info = {"enabled": _TEST_MODE, "path": str(_TEST_MODE_PATH), "size": 0, "exists": False}
+    if _TEST_MODE_PATH.exists():
+        info["exists"] = True
+        try:
+            info["size"] = _TEST_MODE_PATH.stat().st_size
+        except OSError:
+            pass
+    return info
+
+
+@app.get("/api/test-mode.jsonl")
+def test_mode_download() -> FileResponse:
+    """Stream the captured JSONL file for offline inspection."""
+    if not _TEST_MODE:
+        raise HTTPException(404, "test mode is disabled (set WARDEN_TEST_MODE=1)")
+    if not _TEST_MODE_PATH.exists():
+        raise HTTPException(404, "no captures yet — generate some traffic first")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+    return FileResponse(
+        str(_TEST_MODE_PATH),
+        media_type="application/x-ndjson",
+        filename=f"warden-test-mode-{stamp}.jsonl",
+    )
+
+
+@app.get("/api/identity")
+def identity() -> dict:
+    """Return values that have qualified as user-owned (email/IP)."""
+    rows = _identity.known()
+    masked = []
+    for r in rows:
+        v = r["value"]
+        if r["kind"] == "email" and "@" in v:
+            local, _, dom = v.partition("@")
+            shown = (local[:2] + "***" if len(local) > 2 else "***") + "@" + dom
+        else:
+            shown = v
+        masked.append({**r, "shown": shown})
+    return {"signals": masked}
+
+
+@app.delete("/api/identity/{kind}/{value:path}")
+def identity_forget(kind: str, value: str) -> dict:
+    """Manually retract a qualified user-identity value."""
+    if kind not in ("email", "ip"):
+        raise HTTPException(400, "kind must be email or ip")
+    deleted = _identity.forget(kind, value)
+    if not deleted:
+        raise HTTPException(404, f"no identity record for {kind}={value}")
+    return {"deleted": True, "kind": kind, "value": value}
 
 
 @app.get("/api/health")
@@ -50,6 +110,7 @@ def health() -> dict:
         "status": "ok",
         "tier2_enabled": _classifier.model is not None,
         "db": _store.path,
+        "test_mode": _TEST_MODE,
     }
 
 
@@ -64,9 +125,11 @@ def events(
     offset: int = Query(0, ge=0),
     provider: str | None = None,
     min_sensitivity: float | None = Query(None, ge=0.0, le=1.0),
+    intent: str | None = None,
 ) -> dict:
     rows = _store.list_events(
-        limit=limit, offset=offset, provider=provider, min_sensitivity=min_sensitivity
+        limit=limit, offset=offset, provider=provider,
+        min_sensitivity=min_sensitivity, intent=intent,
     )
     return {"events": rows, "limit": limit, "offset": offset}
 
@@ -76,6 +139,7 @@ def events_csv(
     min_sensitivity: float = Query(0.15, ge=0.0, le=1.0),
     provider: str | None = None,
     label: str | None = Query(None, description="exact label filter, e.g. 'low,medium,high,critical'"),
+    intent: str | None = Query(None, description="filter on classified intent (chat,telemetry,antiabuse,handshake,auth,unknown)"),
     limit: int = Query(10000, ge=1, le=100000),
 ) -> StreamingResponse:
     """Stream flagged events as CSV. Defaults to anything not 'clean'
@@ -86,10 +150,15 @@ def events_csv(
     if label:
         wanted = {x.strip() for x in label.split(",") if x.strip()}
         rows = [r for r in rows if r.get("label") in wanted]
+    if intent:
+        wanted_i = {x.strip() for x in intent.split(",") if x.strip()}
+        rows = [r for r in rows if r.get("intent") in wanted_i]
 
     cols = [
         "id", "ts", "provider", "host", "method", "path",
-        "label", "sensitivity", "tier1_score", "tier2_score",
+        "label", "sensitivity", "effective_sensitivity",
+        "tier1_score", "tier2_score",
+        "intent", "intent_conf",
         "categories", "hit_names", "hit_categories",
         "summary", "bytes_out", "sample",
     ]
@@ -113,8 +182,11 @@ def events_csv(
                 r.get("path", ""),
                 r.get("label", ""),
                 f"{float(r.get('sensitivity') or 0):.4f}",
+                f"{float(r.get('effective_sensitivity') or 0):.4f}",
                 f"{float(r.get('tier1_score') or 0):.4f}",
                 f"{float(r.get('tier2_score') or 0):.4f}",
+                r.get("intent", ""),
+                f"{float(r.get('intent_conf') or 0):.3f}",
                 ";".join(cats) if isinstance(cats, list) else json.dumps(cats),
                 hit_names,
                 hit_categories,

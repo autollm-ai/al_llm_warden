@@ -81,7 +81,23 @@ PATTERNS: list[Pattern] = [
     ),
     Pattern(
         "credit_card",
-        re.compile(r"\b(?:\d[ -]*?){13,16}\b"),
+        # Anchor on real card prefixes (Visa, MC, Amex, Discover, JCB,
+        # Diners) AND require a non-alphanumeric boundary on both sides
+        # so a 16-digit run inside base64 / Fernet ciphertext can't match.
+        # Luhn is still validated below.
+        re.compile(
+            r"(?<![A-Za-z0-9])"
+            r"(?:"
+              r"4\d{3}(?:[ -]?\d{4}){3}"                    # Visa 16
+              r"|5[1-5]\d{2}(?:[ -]?\d{4}){3}"              # MasterCard
+              r"|2(?:2[2-9]\d|[3-6]\d{2}|7[01]\d|720)(?:[ -]?\d{4}){3}"  # MC 2-series
+              r"|3[47]\d{2}[ -]?\d{6}[ -]?\d{5}"            # Amex
+              r"|6(?:011|5\d{2})(?:[ -]?\d{4}){3}"          # Discover
+              r"|35(?:2[89]|[3-8]\d)(?:[ -]?\d{4}){3}"      # JCB
+              r"|3(?:0[0-5]|[68]\d)\d(?:[ -]?\d{4})(?:[ -]?\d{4,6})"  # Diners
+            r")"
+            r"(?![A-Za-z0-9])"
+        ),
         0.9,
         "pii",
     ),
@@ -93,7 +109,9 @@ PATTERNS: list[Pattern] = [
     ),
     Pattern(
         "email",
-        re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"),
+        # Local part requires ≥2 chars to keep code idioms like `t@app.get`
+        # out of the hit list (`.get`, `.post`, `.delete` are real TLDs).
+        re.compile(r"\b[A-Za-z0-9._%+\-]{2,}@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"),
         0.4,
         "pii",
     ),
@@ -147,8 +165,10 @@ class RegexHit:
     name: str
     category: str
     weight: float
-    snippet: str  # masked
+    snippet: str           # masked, safe to persist / display
     span: tuple[int, int]
+    raw: str = ""          # in-memory only — used for identity comparison;
+                           # never serialised to the events table.
 
 
 def _mask(value: str) -> str:
@@ -178,6 +198,7 @@ def scan(text: str, max_hits: int = 50) -> tuple[list[RegexHit], float]:
                     weight=p.weight,
                     snippet=_mask(raw),
                     span=m.span(),
+                    raw=raw,
                 )
             )
             # Saturating sum: each hit contributes (weight * remaining headroom).

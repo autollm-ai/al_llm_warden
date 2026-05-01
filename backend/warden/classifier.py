@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from . import bpe, regex_engine
+from . import bpe, dcg, intent as intent_mod, regex_engine
+from .identity import IdentityMemory, KIND_FOR_HIT
 
 log = logging.getLogger("warden.classifier")
 
@@ -30,15 +31,27 @@ def label_for(score: float) -> str:
     return "clean"
 
 
+_LABEL_RANK = {name: i for i, (_, name) in enumerate(reversed(LABELS))}
+
+
+def _clamp_label(label: str, ceiling: str | None) -> str:
+    if ceiling is None:
+        return label
+    return label if _LABEL_RANK[label] <= _LABEL_RANK[ceiling] else ceiling
+
+
 @dataclass
 class Classification:
-    sensitivity: float
+    sensitivity: float          # raw blended score (kept for audit)
     tier1_score: float
     tier2_score: float
-    label: str
+    label: str                  # post-intent-clamp label, this is what the UI shows
     categories: list[str]
     hits: list[dict]
     summary: str
+    intent: str = "unknown"
+    intent_conf: float = 0.0
+    effective_sensitivity: float = 0.0   # sensitivity * intent factor
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +62,9 @@ class Classification:
             "categories": self.categories,
             "hits": self.hits,
             "summary": self.summary,
+            "intent": self.intent,
+            "intent_conf": self.intent_conf,
+            "effective_sensitivity": self.effective_sensitivity,
         }
 
 
@@ -58,6 +74,7 @@ class Classifier:
     model: object | None = None  # lstm.SensitivityLSTM
     device: str = "cpu"
     tier2_weight: float = 0.55  # blend factor; tier-1 still dominates
+    identity: IdentityMemory | None = None
     _torch_available: bool = field(init=False, default=False)
 
     def __post_init__(self) -> None:
@@ -66,6 +83,12 @@ class Classifier:
             self._torch_available = True
         except Exception:
             self._torch_available = False
+        if self.identity is None:
+            try:
+                self.identity = IdentityMemory()
+            except Exception as e:
+                log.warning("IdentityMemory unavailable, exemption disabled: %s", e)
+                self.identity = None
 
     @classmethod
     def from_paths(
@@ -91,9 +114,33 @@ class Classifier:
             log.info("Tier-2 LSTM disabled (model or tokenizer missing) — running tier-1 only.")
         return cls(tokenizer=tok, model=mdl, device=device)
 
-    def classify(self, text: str) -> Classification:
+    def classify(
+        self,
+        text: str,
+        *,
+        provider: str | None = None,
+        method: str = "POST",
+        path: str = "",
+        content_type: str = "",
+    ) -> Classification:
         text = text or ""
-        hits, tier1 = regex_engine.scan(text)
+        re_hits, _re_score_raw = regex_engine.scan(text)
+
+        # Identity exemption: observe every email/IP, then for any hit
+        # whose raw value qualifies as user-owned (≥THRESHOLD recent
+        # recurrences), demote to a low-weight 'user_identity' category.
+        # Recompute the regex score from the filtered weights so the
+        # exempted hits don't drive the band.
+        re_hits = self._apply_identity_exemption(re_hits)
+        re_score = 0.0
+        for h in re_hits:
+            re_score = re_score + h.weight * (1.0 - re_score) * 0.6
+        re_score = min(re_score, 1.0)
+
+        dc_hits, dc_score = dcg.scan(text)
+        hits = re_hits + dc_hits
+        # Treat the two tier-1 pipelines as independent saturating signals.
+        tier1 = re_score + (1.0 - re_score) * dc_score
         tier2 = self._tier2_score(text) if self.model and self.tokenizer else 0.0
 
         # Blend: take whichever signal is stronger and amplify with the other.
@@ -105,19 +152,52 @@ class Classifier:
         if tier2 >= 0.5 and not cats:
             cats.append("semantic")
 
-        summary = self._summary(hits, tier1, tier2, sensitivity)
+        # Intent demotion: telemetry / antiabuse / handshake bodies look
+        # noisy to the regex engine but carry no real user content. We
+        # demote the score and clamp the label, but leave the raw scores
+        # and hits intact so the audit trail stays truthful.
+        ir = intent_mod.classify(provider, method, path, content_type, text)
+        effective = min(1.0, sensitivity * ir.factor)
+        label = _clamp_label(label_for(effective), ir.clamp_label)
+
+        summary = self._summary(hits, tier1, tier2, sensitivity, ir)
         return Classification(
             sensitivity=round(sensitivity, 4),
             tier1_score=round(tier1, 4),
             tier2_score=round(tier2, 4),
-            label=label_for(sensitivity),
+            label=label,
             categories=cats,
             hits=[
                 {"name": h.name, "category": h.category, "weight": h.weight, "snippet": h.snippet}
                 for h in hits
             ],
             summary=summary,
+            intent=ir.intent,
+            intent_conf=round(ir.confidence, 3),
+            effective_sensitivity=round(effective, 4),
         )
+
+    def _apply_identity_exemption(self, hits):
+        """Observe identity hits and demote any user-owned values."""
+        if self.identity is None:
+            return hits
+        out = []
+        for h in hits:
+            kind = KIND_FOR_HIT.get(h.name)
+            if kind and h.raw:
+                try:
+                    self.identity.observe(kind, h.raw)
+                    if self.identity.is_user_owned(kind, h.raw):
+                        out.append(replace(
+                            h,
+                            category="user_identity",
+                            weight=0.05,
+                        ))
+                        continue
+                except Exception as e:
+                    log.warning("identity exemption failed: %s", e)
+            out.append(h)
+        return out
 
     def _tier2_score(self, text: str) -> float:
         if not self._torch_available or self.tokenizer is None or self.model is None:
@@ -149,23 +229,37 @@ class Classifier:
             return 0.0
 
     @staticmethod
-    def _summary(hits, tier1: float, tier2: float, sensitivity: float) -> str:
+    def _summary(hits, tier1: float, tier2: float, sensitivity: float,
+                 ir: intent_mod.IntentResult | None = None) -> str:
         if not hits and sensitivity < 0.15:
             return "No sensitive content detected."
         parts: list[str] = []
-        if hits:
-            seen: dict[str, int] = {}
-            for h in hits:
-                seen[h.name] = seen.get(h.name, 0) + 1
-            top = sorted(seen.items(), key=lambda kv: -kv[1])[:3]
-            parts.append(
-                "Detected " + ", ".join(f"{n.replace('_', ' ')} ×{c}" for n, c in top)
-            )
+        pii_hits = [h for h in hits
+                    if not h.category.startswith("destructive:")
+                    and h.category != "user_identity"]
+        dcg_hits = [h for h in hits if h.category.startswith("destructive:")]
+        identity_hits = [h for h in hits if h.category == "user_identity"]
+        if pii_hits:
+            parts.append("Detected " + _top_names(pii_hits))
+        if dcg_hits:
+            parts.append("destructive command(s): " + _top_names(dcg_hits))
+        if identity_hits:
+            parts.append(f"recognised user identity ×{len(identity_hits)} (exempt)")
         if tier2 >= 0.5:
             parts.append(f"semantic model flagged sensitive content (p={tier2:.2f})")
         if not parts:
             parts.append(f"low-confidence semantic signal (p={tier2:.2f})")
+        if ir is not None and ir.intent in intent_mod.DEMOTED:
+            parts.append(f"demoted to low (intent={ir.intent})")
         return ". ".join(parts) + "."
+
+
+def _top_names(hits, k: int = 3) -> str:
+    seen: dict[str, int] = {}
+    for h in hits:
+        seen[h.name] = seen.get(h.name, 0) + 1
+    top = sorted(seen.items(), key=lambda kv: -kv[1])[:k]
+    return ", ".join(f"{n.replace('_', ' ')} ×{c}" for n, c in top)
 
 
 def default_paths() -> tuple[str, str]:

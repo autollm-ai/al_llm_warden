@@ -28,11 +28,14 @@ async function loadHealth() {
     const h = await api("/api/health");
     const status = $("#proxy-status");
     if (h.status === "ok") {
-      status.textContent = h.tier2_enabled ? "Online · LSTM" : "Online · Regex";
+      const parts = [h.tier2_enabled ? "Online · LSTM" : "Online · Regex"];
+      if (h.test_mode) parts.push("test-mode");
+      status.textContent = parts.join(" · ");
       status.classList.remove("badge-outline", "badge-warn");
       status.classList.add("badge-ok");
     }
     $("#api-info").textContent = `db: ${h.db}`;
+    await refreshTestModeButton(h.test_mode);
   } catch (e) {
     const s = $("#proxy-status");
     s.textContent = "API unreachable";
@@ -40,6 +43,127 @@ async function loadHealth() {
     s.classList.add("badge-warn");
   }
 }
+
+async function loadIdentity() {
+  let signals = [];
+  try {
+    const r = await api("/api/identity");
+    signals = r.signals || [];
+  } catch { return; }
+
+  // Pick the top-count entry per kind. There can only be a "single"
+  // user identity per kind in practice; dups are rare false positives.
+  const byKind = { email: null, ip: null };
+  for (const s of signals) {
+    if (!byKind[s.kind] || s.count > byKind[s.kind].count) byKind[s.kind] = s;
+  }
+
+  for (const kind of ["email", "ip"]) {
+    const card = document.querySelector(`.identity-card[data-kind="${kind}"]`);
+    const slot = card.querySelector(`[data-slot="${kind}"]`);
+    const meta = card.querySelector(`[data-slot="${kind}-meta"]`);
+    let evictBtn = card.querySelector(".identity-evict");
+
+    const sig = byKind[kind];
+    if (sig) {
+      slot.textContent = sig.shown;
+      const last = formatTime(sig.last_seen);
+      meta.textContent = `Recognised after ${sig.count} recurrence${sig.count===1?"":"s"} · last seen ${last}`;
+      card.classList.add("is-known");
+      if (!evictBtn) {
+        evictBtn = document.createElement("button");
+        evictBtn.className = "identity-evict";
+        evictBtn.textContent = "Evict";
+        card.appendChild(evictBtn);
+      }
+      evictBtn.hidden = false;
+      evictBtn.dataset.kind = sig.kind;
+      evictBtn.dataset.value = sig.value;
+    } else {
+      slot.textContent = "—";
+      meta.textContent = kind === "email"
+        ? "Not yet identified · keep using LLM tools"
+        : "Not yet identified";
+      card.classList.remove("is-known");
+      if (evictBtn) evictBtn.hidden = true;
+    }
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("identity-evict")) return;
+  const btn = e.target;
+  const kind = btn.dataset.kind;
+  const value = btn.dataset.value;
+  if (!kind || !value) return;
+  if (!confirm(`Stop treating ${value} as your own ${kind}?\n\nFuture occurrences will be flagged as PII again until it re-qualifies.`)) {
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Evicting…";
+  try {
+    const res = await fetch(`/api/identity/${encodeURIComponent(kind)}/${encodeURIComponent(value)}`,
+                            { method: "DELETE" });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = await res.json(); if (j.detail) msg += ` — ${j.detail}`; } catch {}
+      alert("Evict failed: " + msg);
+      btn.disabled = false; btn.textContent = "Evict";
+      return;
+    }
+    await loadIdentity();
+  } catch (err) {
+    alert("Evict failed: " + err.message);
+    btn.disabled = false; btn.textContent = "Evict";
+  }
+});
+
+async function refreshTestModeButton(testModeOn) {
+  const btn  = $("#export-jsonl");
+  const info = $("#export-jsonl-info");
+  if (!btn) return;
+  if (!testModeOn) {
+    btn.hidden = true;
+    info.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  let stat;
+  try { stat = await api("/api/test-mode"); }
+  catch { return; }
+  if (!stat.exists || stat.size === 0) {
+    btn.disabled = true;
+    info.hidden = false;
+    info.textContent = "No captures yet — send a request through the proxy first.";
+  } else {
+    btn.disabled = false;
+    info.hidden = false;
+    info.textContent = `${fmtBytes(stat.size)} captured`;
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  if (e.target.id !== "export-jsonl") return;
+  e.preventDefault();
+  try {
+    const res = await fetch("/api/test-mode.jsonl");
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = await res.json(); if (j.detail) msg += ` — ${j.detail}`; } catch {}
+      alert("Download failed: " + msg);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().replace(/[-:]/g,"").replace(/\..+/, "Z");
+    a.download = `warden-test-mode-${stamp}.jsonl`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Download failed: " + err.message);
+  }
+});
 
 function fmtNum(n) {
   if (n == null) return "0";
@@ -125,28 +249,42 @@ async function loadSummary() {
 async function loadEvents() {
   const provider = $("#filter-provider").value;
   const minSens = $("#filter-sensitivity").value;
+  const intent = $("#filter-intent").value;
   const params = new URLSearchParams({ limit: "100" });
   if (provider) params.set("provider", provider);
   if (minSens) params.set("min_sensitivity", minSens);
+  if (intent) params.set("intent", intent);
   let data;
   try { data = await api(`/api/events?${params}`); }
   catch (e) {
-    $("#event-tbody").innerHTML = `<tr><td colspan="8" class="empty">Failed to load events.</td></tr>`;
+    $("#event-tbody").innerHTML = `<tr><td colspan="9" class="empty">Failed to load events.</td></tr>`;
     return;
   }
   const rows = data.events;
   if (!rows.length) {
-    $("#event-tbody").innerHTML = `<tr><td colspan="8" class="empty">No events match these filters yet.</td></tr>`;
+    $("#event-tbody").innerHTML = `<tr><td colspan="9" class="empty">No events match these filters yet.</td></tr>`;
     return;
   }
   $("#event-tbody").innerHTML = rows.map(r => {
-    const sens = Math.round(r.sensitivity * 100);
+    // Show the post-intent (effective) score in the badge so the colour
+    // band reflects what users should actually act on. Fall back to raw
+    // sensitivity for legacy rows captured before intent existed.
+    const eff = (r.effective_sensitivity ?? 0) || r.sensitivity || 0;
+    const sens = Math.round(eff * 100);
     const cats = r.categories?.length
-      ? r.categories.map(c => `<span class="badge badge-purple">${escapeHtml(c)}</span>`).join("")
+      ? r.categories.map(c => {
+          const cls = c === "user_identity" ? "badge-identity" : "badge-purple";
+          const label = c === "user_identity" ? "your identity" : c;
+          return `<span class="badge ${cls}">${escapeHtml(label)}</span>`;
+        }).join("")
       : `<span class="badge badge-outline">none</span>`;
+    const intentBadge = r.intent
+      ? `<span class="badge badge-outline" title="confidence ${(r.intent_conf*100|0)}%">${escapeHtml(r.intent)}</span>`
+      : `<span class="badge badge-outline">—</span>`;
     return `<tr>
       <td class="event-time">${escapeHtml(formatTime(r.ts))}</td>
       <td>${escapeHtml(r.provider)}</td>
+      <td>${intentBadge}</td>
       <td><code>${escapeHtml(r.method)}</code></td>
       <td><span class="event-path" title="${escapeAttr(r.path)}">${escapeHtml(r.path)}</span></td>
       <td><span class="badge badge-${r.label}">${r.label} · ${sens}%</span></td>
@@ -178,11 +316,14 @@ async function openDetail(id) {
   let r;
   try { r = await api(`/api/events/${id}`); }
   catch { return; }
-  const hits = (r.hits || []).map(h =>
-    `<li><span class="badge badge-purple">${escapeHtml(h.category)}</span>
+  const hits = (r.hits || []).map(h => {
+    const isIdentity = h.category === "user_identity";
+    const cls = isIdentity ? "badge-identity" : "badge-purple";
+    const label = isIdentity ? "your identity (exempt)" : h.category;
+    return `<li><span class="badge ${cls}">${escapeHtml(label)}</span>
          <code>${escapeHtml(h.name)}</code>
-         <span style="margin-left:auto; color: var(--mp-text-secondary)">${escapeHtml(h.snippet)}</span></li>`
-  ).join("") || `<li style="color: var(--mp-text-tertiary)">No deterministic hits.</li>`;
+         <span style="margin-left:auto; color: var(--mp-text-secondary)">${escapeHtml(h.snippet)}</span></li>`;
+  }).join("") || `<li style="color: var(--mp-text-tertiary)">No deterministic hits.</li>`;
   $("#modal-body").innerHTML = `
     <h3 style="font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px">
       Event #${r.id} — ${escapeHtml(r.provider)}
@@ -196,8 +337,13 @@ async function openDetail(id) {
       <div class="detail-row"><dt>Request</dt><dd><code>${escapeHtml(r.method)} ${escapeHtml(r.path)}</code></dd></div>
       <div class="detail-row"><dt>Sensitivity</dt>
         <dd><span class="badge badge-${r.label}">${r.label}</span>
-            &nbsp;${(r.sensitivity*100).toFixed(0)}%
-            (regex ${(r.tier1_score*100).toFixed(0)}%, lstm ${(r.tier2_score*100).toFixed(0)}%)</dd></div>
+            &nbsp;effective ${((r.effective_sensitivity ?? r.sensitivity)*100).toFixed(0)}%
+            &nbsp;<span style="color: var(--mp-text-tertiary)">(raw ${(r.sensitivity*100).toFixed(0)}%,
+            regex ${(r.tier1_score*100).toFixed(0)}%,
+            lstm ${(r.tier2_score*100).toFixed(0)}%)</span></dd></div>
+      <div class="detail-row"><dt>Intent</dt>
+        <dd>${escapeHtml(r.intent || "unknown")}
+            <span style="color: var(--mp-text-tertiary)">&nbsp;(conf ${((r.intent_conf||0)*100).toFixed(0)}%)</span></dd></div>
       <div class="detail-row"><dt>Bytes out</dt><dd>${fmtBytes(r.bytes_out)}</dd></div>
       <div class="detail-row"><dt>Categories</dt>
         <dd>${(r.categories||[]).map(c=>`<span class="badge badge-purple">${escapeHtml(c)}</span>`).join(" ") || "<em>none</em>"}</dd></div>
@@ -232,18 +378,22 @@ $("#test-run").addEventListener("click", async () => {
 $("#refresh-btn").addEventListener("click", refresh);
 $("#filter-provider").addEventListener("change", loadEvents);
 $("#filter-sensitivity").addEventListener("change", loadEvents);
+$("#filter-intent").addEventListener("change", loadEvents);
 
 // Keep the CSV export URL in sync with the active filters so users download
 // exactly what they see on screen.
 function updateExportHref() {
   const provider = $("#filter-provider").value;
   const minSens  = $("#filter-sensitivity").value || "0.15";
+  const intent   = $("#filter-intent").value;
   const params = new URLSearchParams({ limit: "10000", min_sensitivity: minSens });
   if (provider) params.set("provider", provider);
+  if (intent)   params.set("intent", intent);
   $("#export-csv").href = `/api/events.csv?${params}`;
 }
 $("#filter-provider").addEventListener("change", updateExportHref);
 $("#filter-sensitivity").addEventListener("change", updateExportHref);
+$("#filter-intent").addEventListener("change", updateExportHref);
 updateExportHref();
 
 // ── HELPERS ──────────────────────────────────────────────────────────────────
@@ -256,7 +406,7 @@ function escapeHtml(s) {
 function escapeAttr(s) { return escapeHtml(s); }
 
 async function refresh() {
-  await Promise.all([loadHealth(), loadSummary(), loadEvents()]);
+  await Promise.all([loadHealth(), loadSummary(), loadEvents(), loadIdentity()]);
 }
 
 refresh();

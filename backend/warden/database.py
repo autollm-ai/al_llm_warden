@@ -14,26 +14,45 @@ DEFAULT_DB_PATH = os.environ.get("WARDEN_DB", "/data/warden.db")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts           TEXT    NOT NULL,
-    host         TEXT    NOT NULL,
-    provider     TEXT    NOT NULL,
-    method       TEXT    NOT NULL,
-    path         TEXT    NOT NULL,
-    sensitivity  REAL    NOT NULL,
-    tier1_score  REAL    NOT NULL,
-    tier2_score  REAL    NOT NULL,
-    label        TEXT    NOT NULL,
-    categories   TEXT    NOT NULL,    -- JSON list
-    hits         TEXT    NOT NULL,    -- JSON list of regex hits (masked)
-    summary      TEXT    NOT NULL,
-    bytes_out    INTEGER NOT NULL,
-    sample       TEXT    NOT NULL     -- masked first ~400 chars of body
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts                    TEXT    NOT NULL,
+    host                  TEXT    NOT NULL,
+    provider              TEXT    NOT NULL,
+    method                TEXT    NOT NULL,
+    path                  TEXT    NOT NULL,
+    sensitivity           REAL    NOT NULL,   -- raw blended score (kept for audit)
+    tier1_score           REAL    NOT NULL,
+    tier2_score           REAL    NOT NULL,
+    label                 TEXT    NOT NULL,   -- post-intent-clamp label shown in UI
+    categories            TEXT    NOT NULL,
+    hits                  TEXT    NOT NULL,
+    summary               TEXT    NOT NULL,
+    bytes_out             INTEGER NOT NULL,
+    sample                TEXT    NOT NULL,
+    intent                TEXT    NOT NULL DEFAULT 'unknown',
+    intent_conf           REAL    NOT NULL DEFAULT 0.0,
+    effective_sensitivity REAL    NOT NULL DEFAULT 0.0
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts        ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_provider  ON events(provider);
 CREATE INDEX IF NOT EXISTS idx_events_label     ON events(label);
 """
+
+# The intent index depends on a column added by a migration, so it
+# can't live in _SCHEMA (legacy DBs would fail because executescript
+# runs before our ALTER). Created after migrations have completed.
+_POST_MIGRATION_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_events_intent ON events(intent)",
+]
+
+# Idempotent ALTER TABLEs for existing databases. Each is wrapped so a
+# second startup is a no-op even though SQLite has no IF NOT EXISTS for
+# ADD COLUMN.
+_MIGRATIONS: list[tuple[str, str]] = [
+    ("intent",                "ALTER TABLE events ADD COLUMN intent TEXT NOT NULL DEFAULT 'unknown'"),
+    ("intent_conf",           "ALTER TABLE events ADD COLUMN intent_conf REAL NOT NULL DEFAULT 0.0"),
+    ("effective_sensitivity", "ALTER TABLE events ADD COLUMN effective_sensitivity REAL NOT NULL DEFAULT 0.0"),
+]
 
 
 @dataclass
@@ -52,6 +71,9 @@ class Event:
     summary: str
     bytes_out: int
     sample: str
+    intent: str = "unknown"
+    intent_conf: float = 0.0
+    effective_sensitivity: float = 0.0
 
     def to_row(self) -> tuple:
         return (
@@ -69,6 +91,9 @@ class Event:
             self.summary,
             self.bytes_out,
             self.sample,
+            self.intent,
+            self.intent_conf,
+            self.effective_sensitivity,
         )
 
 
@@ -79,6 +104,12 @@ class EventStore:
         self._lock = threading.Lock()
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(events)")}
+            for col, sql in _MIGRATIONS:
+                if col not in cols:
+                    conn.execute(sql)
+            for sql in _POST_MIGRATION_INDEXES:
+                conn.execute(sql)
             conn.commit()
 
     @contextmanager
@@ -96,8 +127,9 @@ class EventStore:
                 """INSERT INTO events
                    (ts, host, provider, method, path, sensitivity,
                     tier1_score, tier2_score, label, categories, hits,
-                    summary, bytes_out, sample)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    summary, bytes_out, sample,
+                    intent, intent_conf, effective_sensitivity)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 event.to_row(),
             )
             conn.commit()
@@ -109,14 +141,20 @@ class EventStore:
         offset: int = 0,
         provider: str | None = None,
         min_sensitivity: float | None = None,
+        intent: str | None = None,
     ) -> list[dict]:
         clauses, params = [], []
         if provider:
             clauses.append("provider = ?")
             params.append(provider)
         if min_sensitivity is not None:
-            clauses.append("sensitivity >= ?")
+            # Filter on the user-facing (post-intent) score; falling back
+            # to raw sensitivity for legacy rows where effective is 0.
+            clauses.append("COALESCE(NULLIF(effective_sensitivity, 0), sensitivity) >= ?")
             params.append(min_sensitivity)
+        if intent:
+            clauses.append("intent = ?")
+            params.append(intent)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         sql = f"SELECT * FROM events {where} ORDER BY id DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])

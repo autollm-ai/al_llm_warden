@@ -22,6 +22,7 @@
       </a>
       <ul class="nav-links">
         <li><a href="#dashboard">Dashboard</a></li>
+        <li><a href="#identity">Identity</a></li>
         <li><a href="#events">Events</a></li>
         <li><a href="#test">Test</a></li>
       </ul>
@@ -58,6 +59,30 @@
       <div id="provider-grid" class="cards-grid"></div>
     </section>
 
+    <section id="identity" class="section">
+      <div class="section-head">
+        <h2 class="section-title">Recognised identity</h2>
+        <p class="section-desc">
+          Warden learns the email and IP that show up in nearly every outbound
+          request — your login identity, already shared with consent — and
+          exempts them from sensitivity flagging. No setup needed; pattern
+          appears here once it qualifies (≥5 recurrences, trailing 24 h).
+        </p>
+      </div>
+      <div id="identity-grid" class="identity-grid">
+        <div class="identity-card" data-kind="email">
+          <div class="identity-kind">Your email</div>
+          <div class="identity-value" data-slot="email">—</div>
+          <div class="identity-meta" data-slot="email-meta">Not yet identified · keep using LLM tools</div>
+        </div>
+        <div class="identity-card" data-kind="ip">
+          <div class="identity-kind">Your outbound IP</div>
+          <div class="identity-value" data-slot="ip">—</div>
+          <div class="identity-meta" data-slot="ip-meta">Not yet identified</div>
+        </div>
+      </div>
+    </section>
+
     <section id="events" class="section">
       <div class="section-head">
         <h2 class="section-title">Recent events</h2>
@@ -72,18 +97,40 @@
           <option value="0.65">High+</option>
           <option value="0.85">Critical only</option>
         </select>
+        <select id="filter-intent">
+          <option value="">All intents</option>
+          <option value="chat">chat</option>
+          <option value="auth">auth</option>
+          <option value="handshake">handshake</option>
+          <option value="telemetry">telemetry</option>
+          <option value="antiabuse">antiabuse</option>
+          <option value="unknown">unknown</option>
+        </select>
         <button class="btn btn-secondary btn-sm" id="refresh-btn">Refresh</button>
         <a class="btn btn-secondary btn-sm" id="export-csv" href="/api/events.csv?min_sensitivity=0.15&limit=10000" download>Export flagged (CSV)</a>
+        <button class="btn btn-secondary btn-sm" id="export-jsonl" hidden>Download capture (JSONL)</button>
+        <span id="export-jsonl-info" class="test-hint" hidden></span>
       </div>
       <div class="event-table-wrap">
         <table class="event-table">
+          <colgroup>
+            <col style="width: 130px" />
+            <col style="width: 110px" />
+            <col style="width: 90px" />
+            <col style="width: 70px" />
+            <col style="width: 200px" />
+            <col style="width: 130px" />
+            <col style="width: 130px" />
+            <col />
+            <col style="width: 88px" />
+          </colgroup>
           <thead>
             <tr>
-              <th>Time</th><th>Provider</th><th>Method</th><th>Path</th>
+              <th>Time</th><th>Provider</th><th>Intent</th><th>Method</th><th>Path</th>
               <th>Sensitivity</th><th>Categories</th><th>Summary</th><th></th>
             </tr>
           </thead>
-          <tbody id="event-tbody"><tr><td colspan="8" class="empty">Loading…</td></tr></tbody>
+          <tbody id="event-tbody"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>
