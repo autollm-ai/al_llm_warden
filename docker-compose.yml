@@ -22,6 +22,20 @@ services:
       # for offline analysis / model training. Off by default.
       - WARDEN_TEST_MODE=${WARDEN_TEST_MODE:-0}
       - WARDEN_TEST_MODE_PATH=/data/warden-test-mode.jsonl
+      # Kill switch for the SSE/chunked response tap. Set to 0 to fall
+      # back to historic stream-passthrough (response classification is
+      # then silently skipped for streaming endpoints — Anthropic /v1/
+      # messages, OpenAI /v1/chat/completions, Gemini etc.). Use this if
+      # the tap interacts badly with a specific client; flipping to 0 +
+      # `docker compose up -d warden-proxy` rolls back in ~1 second
+      # without a rebuild.
+      - WARDEN_TAP_STREAMS=${WARDEN_TAP_STREAMS:-1}
+      # Hard-block responses whose label lands in WARDEN_GUARDRAIL_LABELS
+      # (default critical,high). Off by default — observation-only mode
+      # is the right default until you trust the classifier on YOUR
+      # traffic. Flip to 1 once you've audited a week of response events
+      # and confirmed no false positives at high/critical.
+      - WARDEN_GUARDRAIL_RESPONSES=${WARDEN_GUARDRAIL_RESPONSES:-0}
     user: "0:0"   # need write access to /home/mitmproxy/.mitmproxy
     restart: unless-stopped
     healthcheck:

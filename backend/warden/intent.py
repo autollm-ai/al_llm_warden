@@ -67,8 +67,10 @@ class IntentResult:
 _TELEMETRY_PATHS = re.compile(
     r"""(?ix)
     ^/api/event_logging/    |   # Anthropic Claude-Code internal events
+    ^/api/eval/             |   # Anthropic eval SDK (FP from JSONL #2)
     ^/ces/v1/(?:t|m|p|rgstr|telemetry)\b |   # ChatGPT Segment.io intake
     ^/ces/statsc/           |   # ChatGPT histogram flush
+    /telemetry/intake\b     |   # Datadog-forwarder intake (ces/v1/telemetry/intake?ddforward=)
     ^/v1/telemetry          |
     /segment\.io/           |
     /analytics/v1/          |
@@ -180,17 +182,21 @@ def classify(
         # Still let auth/telemetry rules fire — they sometimes use GET.
         pass
 
-    # 1. Anti-abuse — most expensive false-positive source. Catch by path
-    # OR by Fernet/binary body shape.
+    # 1. Anti-abuse BY PATH — most expensive false-positive source.
     if _ANTIABUSE_PATHS.search(path):
         return _result("antiabuse", 0.95)
-    if body_text.startswith(_FERNET_PREFIX) or _looks_binary(body_bytes):
-        # Body looks like an encrypted/compressed blob → not user content.
-        return _result("antiabuse", 0.7)
 
-    # 2. Telemetry
+    # 2. Telemetry BY PATH — must run *before* the antiabuse-by-body
+    # check below, otherwise gzip-compressed Segment.io payloads (e.g.
+    # /ces/v1/rgstr?gz=1) match the gzip magic bytes and get mis-tagged
+    # as antiabuse instead of telemetry.
     if _TELEMETRY_PATHS.search(path):
         return _result("telemetry", 0.95)
+
+    # 3. Anti-abuse BY BODY SHAPE — only reached for paths we don't
+    # recognise. Fernet token / gzipped binary blob = not user content.
+    if body_text.startswith(_FERNET_PREFIX) or _looks_binary(body_bytes):
+        return _result("antiabuse", 0.7)
 
     # 3. Auth (before handshake/chat — token endpoints can look chat-shaped)
     if _AUTH_PATHS.search(path):
@@ -209,7 +215,29 @@ def classify(
     if _looks_chat_payload(body_text):
         return _result("chat", 0.7)
 
-    # 6. Fallback. Treated as `chat` for severity (safer to over-flag than
+    # 6. Trained-model fallback. Only consulted when the rules above all
+    # missed — keeps in-distribution traffic on the deterministic path
+    # but lets a NB model (trained from the user's own captures via
+    # `python -m training.train_intent <jsonl>`) take a shot at novel
+    # paths the regex doesn't recognise yet. Returns None until a model
+    # is actually trained, in which case we keep the historic 'unknown'
+    # behavior — a fresh checkout is fully working with no training step.
+    try:
+        from warden import intent_model
+        guess = intent_model.predict(path, body_text)
+    except Exception:
+        guess = None
+    if guess is not None:
+        intent_name, prob = guess
+        # NB is badly-calibrated — the threshold is "is the model
+        # actually committing" rather than "is it 75% sure". Empirically
+        # 0.55 separates 'real signal' from 'no idea'. Anything below
+        # falls back to 'unknown' so the UI still shows the user that
+        # we don't recognise the path.
+        if intent_name in INTENT_FACTOR and prob >= 0.55:
+            return _result(intent_name, min(prob, 0.85))
+
+    # 7. Fallback. Treated as `chat` for severity (safer to over-flag than
     # under-flag) but distinguishable in the UI.
     return _result("unknown", 0.4)
 

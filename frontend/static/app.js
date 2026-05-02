@@ -250,19 +250,21 @@ async function loadEvents() {
   const provider = $("#filter-provider").value;
   const minSens = $("#filter-sensitivity").value;
   const intent = $("#filter-intent").value;
+  const direction = $("#filter-direction") ? $("#filter-direction").value : "";
   const params = new URLSearchParams({ limit: "100" });
   if (provider) params.set("provider", provider);
   if (minSens) params.set("min_sensitivity", minSens);
   if (intent) params.set("intent", intent);
+  if (direction) params.set("direction", direction);
   let data;
   try { data = await api(`/api/events?${params}`); }
   catch (e) {
-    $("#event-tbody").innerHTML = `<tr><td colspan="9" class="empty">Failed to load events.</td></tr>`;
+    $("#event-tbody").innerHTML = `<tr><td colspan="10" class="empty">Failed to load events.</td></tr>`;
     return;
   }
   const rows = data.events;
   if (!rows.length) {
-    $("#event-tbody").innerHTML = `<tr><td colspan="9" class="empty">No events match these filters yet.</td></tr>`;
+    $("#event-tbody").innerHTML = `<tr><td colspan="10" class="empty">No events match these filters yet.</td></tr>`;
     return;
   }
   $("#event-tbody").innerHTML = rows.map(r => {
@@ -281,8 +283,13 @@ async function loadEvents() {
     const intentBadge = r.intent
       ? `<span class="badge badge-outline" title="confidence ${(r.intent_conf*100|0)}%">${escapeHtml(r.intent)}</span>`
       : `<span class="badge badge-outline">—</span>`;
+    // Direction arrow: ↑ (request: client → model) or ↓ (response: model → client).
+    const isResp = r.direction === "response";
+    const dirBadge = `<span class="badge ${isResp ? 'badge-purple' : 'badge-outline'}"
+      title="${isResp ? 'model response' : 'outbound request'}">${isResp ? '↓ R' : '↑ Q'}</span>`;
     return `<tr>
       <td class="event-time">${escapeHtml(formatTime(r.ts))}</td>
+      <td>${dirBadge}</td>
       <td>${escapeHtml(r.provider)}</td>
       <td>${intentBadge}</td>
       <td><code>${escapeHtml(r.method)}</code></td>
@@ -296,6 +303,107 @@ async function loadEvents() {
 
   $$("#event-tbody .row-link").forEach(btn => {
     btn.addEventListener("click", () => openDetail(btn.dataset.id));
+  });
+}
+
+// ── DOMAIN REGISTRY ──────────────────────────────────────────────────────────
+
+async function loadDomains() {
+  const tbody = $("#domain-tbody");
+  if (!tbody) return;
+  let data;
+  try { data = await api("/api/domains"); }
+  catch {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">Failed to load domains.</td></tr>`;
+    return;
+  }
+  const rows = data.domains || [];
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">No domains configured.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(d => {
+    const enabled = d.enabled === 1 || d.enabled === true;
+    const sourceBadge = d.source === "seed"
+      ? `<span class="badge badge-outline" title="Built-in default">seed</span>`
+      : `<span class="badge badge-purple" title="Added from this UI">user</span>`;
+    return `<tr data-host="${escapeAttr(d.host)}">
+      <td><code>${escapeHtml(d.host)}</code></td>
+      <td>${escapeHtml(d.label || "")}</td>
+      <td>${sourceBadge}</td>
+      <td>
+        <label class="domain-toggle" title="Toggle monitoring for this host">
+          <input type="checkbox" class="domain-enabled" ${enabled ? "checked" : ""} />
+          <span>${enabled ? "monitored" : "ignored"}</span>
+        </label>
+      </td>
+      <td><button class="row-link domain-remove" data-host="${escapeAttr(d.host)}">Remove</button></td>
+    </tr>`;
+  }).join("");
+
+  tbody.querySelectorAll(".domain-enabled").forEach(cb => {
+    cb.addEventListener("change", async (e) => {
+      const host = e.target.closest("tr").dataset.host;
+      try {
+        const res = await fetch(`/api/domains/${encodeURIComponent(host)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: e.target.checked }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch (err) {
+        alert("Toggle failed: " + err.message);
+        e.target.checked = !e.target.checked;
+        return;
+      }
+      loadDomains();
+    });
+  });
+  tbody.querySelectorAll(".domain-remove").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      const host = btn.dataset.host;
+      if (!confirm(`Stop monitoring ${host}?\n\nFuture traffic to this host will pass through Warden untouched (no logs, no scoring).`)) {
+        return;
+      }
+      btn.disabled = true; btn.textContent = "Removing…";
+      try {
+        const res = await fetch(`/api/domains/${encodeURIComponent(host)}`, { method: "DELETE" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch (err) {
+        alert("Remove failed: " + err.message);
+        btn.disabled = false; btn.textContent = "Remove";
+        return;
+      }
+      loadDomains();
+    });
+  });
+}
+
+const domainAddForm = $("#domain-add-form");
+if (domainAddForm) {
+  domainAddForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const host = $("#domain-host").value.trim();
+    const label = $("#domain-label").value.trim();
+    if (!host) return;
+    try {
+      const res = await fetch("/api/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host, label: label || null }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); if (j.detail) msg += ` — ${j.detail}`; } catch {}
+        alert("Add failed: " + msg);
+        return;
+      }
+      $("#domain-host").value = "";
+      $("#domain-label").value = "";
+      loadDomains();
+    } catch (err) {
+      alert("Add failed: " + err.message);
+    }
   });
 }
 
@@ -379,6 +487,7 @@ $("#refresh-btn").addEventListener("click", refresh);
 $("#filter-provider").addEventListener("change", loadEvents);
 $("#filter-sensitivity").addEventListener("change", loadEvents);
 $("#filter-intent").addEventListener("change", loadEvents);
+if ($("#filter-direction")) $("#filter-direction").addEventListener("change", loadEvents);
 
 // Keep the CSV export URL in sync with the active filters so users download
 // exactly what they see on screen.
@@ -406,7 +515,7 @@ function escapeHtml(s) {
 function escapeAttr(s) { return escapeHtml(s); }
 
 async function refresh() {
-  await Promise.all([loadHealth(), loadSummary(), loadEvents(), loadIdentity()]);
+  await Promise.all([loadHealth(), loadSummary(), loadEvents(), loadIdentity(), loadDomains()]);
 }
 
 refresh();

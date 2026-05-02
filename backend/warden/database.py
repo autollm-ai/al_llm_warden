@@ -31,11 +31,26 @@ CREATE TABLE IF NOT EXISTS events (
     sample                TEXT    NOT NULL,
     intent                TEXT    NOT NULL DEFAULT 'unknown',
     intent_conf           REAL    NOT NULL DEFAULT 0.0,
-    effective_sensitivity REAL    NOT NULL DEFAULT 0.0
+    effective_sensitivity REAL    NOT NULL DEFAULT 0.0,
+    direction             TEXT    NOT NULL DEFAULT 'request' -- request | response
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts        ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_provider  ON events(provider);
 CREATE INDEX IF NOT EXISTS idx_events_label     ON events(label);
+
+-- Live-editable monitored-domain registry. Seeded from
+-- warden.domains.SHADOW_AI_DOMAINS on first boot (source='seed'); user
+-- edits via the UI add rows with source='user' and may toggle 'enabled'.
+-- The proxy addon polls this table on a TTL so edits take effect within
+-- a few seconds without a restart.
+CREATE TABLE IF NOT EXISTS domains (
+    host       TEXT    PRIMARY KEY,
+    label      TEXT    NOT NULL,
+    enabled    INTEGER NOT NULL DEFAULT 1,
+    source     TEXT    NOT NULL DEFAULT 'user',  -- 'seed' | 'user'
+    created_at TEXT    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_domains_enabled ON domains(enabled);
 """
 
 # The intent index depends on a column added by a migration, so it
@@ -52,6 +67,7 @@ _MIGRATIONS: list[tuple[str, str]] = [
     ("intent",                "ALTER TABLE events ADD COLUMN intent TEXT NOT NULL DEFAULT 'unknown'"),
     ("intent_conf",           "ALTER TABLE events ADD COLUMN intent_conf REAL NOT NULL DEFAULT 0.0"),
     ("effective_sensitivity", "ALTER TABLE events ADD COLUMN effective_sensitivity REAL NOT NULL DEFAULT 0.0"),
+    ("direction",             "ALTER TABLE events ADD COLUMN direction TEXT NOT NULL DEFAULT 'request'"),
 ]
 
 
@@ -74,6 +90,7 @@ class Event:
     intent: str = "unknown"
     intent_conf: float = 0.0
     effective_sensitivity: float = 0.0
+    direction: str = "request"   # 'request' | 'response'
 
     def to_row(self) -> tuple:
         return (
@@ -94,6 +111,7 @@ class Event:
             self.intent,
             self.intent_conf,
             self.effective_sensitivity,
+            self.direction,
         )
 
 
@@ -128,8 +146,8 @@ class EventStore:
                    (ts, host, provider, method, path, sensitivity,
                     tier1_score, tier2_score, label, categories, hits,
                     summary, bytes_out, sample,
-                    intent, intent_conf, effective_sensitivity)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    intent, intent_conf, effective_sensitivity, direction)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 event.to_row(),
             )
             conn.commit()
@@ -142,6 +160,7 @@ class EventStore:
         provider: str | None = None,
         min_sensitivity: float | None = None,
         intent: str | None = None,
+        direction: str | None = None,
     ) -> list[dict]:
         clauses, params = [], []
         if provider:
@@ -155,6 +174,9 @@ class EventStore:
         if intent:
             clauses.append("intent = ?")
             params.append(intent)
+        if direction:
+            clauses.append("direction = ?")
+            params.append(direction)
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         sql = f"SELECT * FROM events {where} ORDER BY id DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
@@ -209,3 +231,98 @@ class EventStore:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+class DomainStore:
+    """Live-editable monitored-domain registry.
+
+    On first boot, ``ensure_seeded(defaults)`` inserts the static defaults
+    from ``warden.domains.SHADOW_AI_DOMAINS`` as ``source='seed'``. UI edits
+    add ``source='user'`` rows or update existing ones. The proxy addon
+    polls ``enabled_map()`` on a TTL so edits take effect within seconds
+    without a process restart.
+    """
+
+    def __init__(self, path: str | Path = DEFAULT_DB_PATH) -> None:
+        self.path = str(path)
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
+        with sqlite3.connect(self.path, timeout=10) as conn:
+            conn.executescript(_SCHEMA)
+            conn.commit()
+
+    @contextmanager
+    def _connect(self):
+        conn = sqlite3.connect(self.path, timeout=10)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+        finally:
+            conn.close()
+
+    def ensure_seeded(self, defaults: dict[str, str]) -> int:
+        """Insert any missing default domains. Returns count inserted."""
+        ts = now_iso()
+        inserted = 0
+        with self._lock, self._connect() as conn:
+            existing = {r["host"] for r in conn.execute("SELECT host FROM domains")}
+            for host, label in defaults.items():
+                if host in existing:
+                    continue
+                conn.execute(
+                    "INSERT INTO domains (host, label, enabled, source, created_at) VALUES (?,?,?,?,?)",
+                    (host, label, 1, "seed", ts),
+                )
+                inserted += 1
+            conn.commit()
+        return inserted
+
+    def list(self) -> list[dict]:
+        with self._connect() as conn:
+            return [dict(r) for r in conn.execute(
+                "SELECT host, label, enabled, source, created_at FROM domains ORDER BY label, host"
+            )]
+
+    def enabled_map(self) -> dict[str, str]:
+        """Return {host: label} for all *enabled* domains. Used by lookup_provider."""
+        with self._connect() as conn:
+            return {r["host"]: r["label"] for r in conn.execute(
+                "SELECT host, label FROM domains WHERE enabled = 1"
+            )}
+
+    def add(self, host: str, label: str) -> dict:
+        host = (host or "").strip().lower().split(":", 1)[0]
+        label = (label or "").strip() or host
+        if not host or "." not in host or " " in host or "/" in host:
+            raise ValueError(f"invalid host: {host!r}")
+        ts = now_iso()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """INSERT INTO domains (host, label, enabled, source, created_at)
+                   VALUES (?,?,1,'user',?)
+                   ON CONFLICT(host) DO UPDATE SET label=excluded.label, enabled=1""",
+                (host, label, ts),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT host, label, enabled, source, created_at FROM domains WHERE host=?",
+                (host,),
+            ).fetchone()
+        return dict(row)
+
+    def remove(self, host: str) -> bool:
+        host = (host or "").strip().lower()
+        with self._lock, self._connect() as conn:
+            cur = conn.execute("DELETE FROM domains WHERE host = ?", (host,))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def set_enabled(self, host: str, enabled: bool) -> bool:
+        host = (host or "").strip().lower()
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE domains SET enabled = ? WHERE host = ?",
+                (1 if enabled else 0, host),
+            )
+            conn.commit()
+            return cur.rowcount > 0

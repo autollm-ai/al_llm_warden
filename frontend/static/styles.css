@@ -418,11 +418,54 @@ a { color: inherit; }
 }
 .mono { font-family: var(--font-mono); }
 
+/* ── DOMAINS PANEL ── */
+.domains-card {
+  background: var(--mp-cream);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--r-md);
+  padding: 20px;
+}
+.domain-add {
+  display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.domain-add input {
+  flex: 1 1 220px; min-width: 0;
+  font-family: var(--font-mono); font-size: 13px;
+  padding: 8px 12px; border: 1px solid var(--mp-border);
+  border-radius: var(--r-sm); background: white;
+  color: var(--mp-text-primary);
+}
+.domain-add input:focus {
+  outline: 2px solid var(--mp-purple-light);
+  border-color: var(--mp-purple);
+}
+.domain-table-wrap { overflow-x: auto; }
+.domain-table { width: 100%; border-collapse: collapse; }
+.domain-table th, .domain-table td {
+  text-align: left; padding: 10px 12px; font-size: 13px;
+  border-bottom: 1px solid var(--mp-border);
+}
+.domain-table th {
+  font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--mp-text-tertiary);
+  background: var(--mp-off-white);
+}
+.domain-table code { font-family: var(--font-mono); color: var(--mp-text-primary); }
+.domain-toggle {
+  display: inline-flex; gap: 8px; align-items: center;
+  font-size: 12px; color: var(--mp-text-secondary); cursor: pointer;
+}
+.domain-toggle input { accent-color: var(--mp-purple); }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 768px) {
   .nav-links { display: none; }
-  /* hide Method (4), Path (5), Categories (7) — keep View column visible */
-  .event-table th:nth-child(4), .event-table td:nth-child(4),
+  /* event-table now has 10 cols: Time(1) Dir(2) Provider(3) Intent(4) Method(5)
+     Path(6) Sensitivity(7) Categories(8) Summary(9) View(10).
+     Hide Dir, Method, Path, Categories on small screens. */
+  .event-table th:nth-child(2), .event-table td:nth-child(2),
   .event-table th:nth-child(5), .event-table td:nth-child(5),
-  .event-table th:nth-child(7), .event-table td:nth-child(7) { display: none; }
+  .event-table th:nth-child(6), .event-table td:nth-child(6),
+  .event-table th:nth-child(8), .event-table td:nth-child(8) { display: none; }
+  .domain-table th:nth-child(3), .domain-table td:nth-child(3) { display: none; }
 }

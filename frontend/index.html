@@ -23,6 +23,7 @@
       <ul class="nav-links">
         <li><a href="#dashboard">Dashboard</a></li>
         <li><a href="#identity">Identity</a></li>
+        <li><a href="#domains">Domains</a></li>
         <li><a href="#events">Events</a></li>
         <li><a href="#test">Test</a></li>
       </ul>
@@ -83,6 +84,39 @@
       </div>
     </section>
 
+    <section id="domains" class="section">
+      <div class="section-head">
+        <h2 class="section-title">Monitored domains</h2>
+        <p class="section-desc">
+          Outbound traffic is only inspected for hosts in this list (matched
+          exactly or by suffix). Anything else flows through Warden untouched
+          — no logging, no scoring, no cert mismatch. Edits take effect within
+          ~5 seconds without a restart.
+        </p>
+      </div>
+      <div class="domains-card">
+        <form id="domain-add-form" class="domain-add">
+          <input type="text" id="domain-host" placeholder="api.example-llm.com"
+                 autocomplete="off" spellcheck="false" required />
+          <input type="text" id="domain-label" placeholder="Display label (optional)"
+                 autocomplete="off" />
+          <button class="btn btn-primary btn-sm" type="submit">Monitor</button>
+        </form>
+        <div class="domain-table-wrap">
+          <table class="domain-table">
+            <thead>
+              <tr>
+                <th>Host</th><th>Label</th><th>Source</th><th>Status</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="domain-tbody">
+              <tr><td colspan="5" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <section id="events" class="section">
       <div class="section-head">
         <h2 class="section-title">Recent events</h2>
@@ -106,6 +140,11 @@
           <option value="antiabuse">antiabuse</option>
           <option value="unknown">unknown</option>
         </select>
+        <select id="filter-direction" title="request = what you sent · response = what the model sent back">
+          <option value="">Both directions</option>
+          <option value="request">Requests only</option>
+          <option value="response">Responses only</option>
+        </select>
         <button class="btn btn-secondary btn-sm" id="refresh-btn">Refresh</button>
         <a class="btn btn-secondary btn-sm" id="export-csv" href="/api/events.csv?min_sensitivity=0.15&limit=10000" download>Export flagged (CSV)</a>
         <button class="btn btn-secondary btn-sm" id="export-jsonl" hidden>Download capture (JSONL)</button>
@@ -115,6 +154,7 @@
         <table class="event-table">
           <colgroup>
             <col style="width: 130px" />
+            <col style="width: 50px" />
             <col style="width: 110px" />
             <col style="width: 90px" />
             <col style="width: 70px" />
@@ -126,11 +166,11 @@
           </colgroup>
           <thead>
             <tr>
-              <th>Time</th><th>Provider</th><th>Intent</th><th>Method</th><th>Path</th>
+              <th>Time</th><th>Dir</th><th>Provider</th><th>Intent</th><th>Method</th><th>Path</th>
               <th>Sensitivity</th><th>Categories</th><th>Summary</th><th></th>
             </tr>
           </thead>
-          <tbody id="event-tbody"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+          <tbody id="event-tbody"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
     </section>

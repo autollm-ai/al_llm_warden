@@ -12,6 +12,24 @@ set -euo pipefail
 CA_FILE="${CA_FILE:-./mitmproxy-ca.pem}"
 CA_NICKNAME="warden-mitmproxy"
 
+# ── Brand logo (printed before any other output for instant recall) ────────
+print_logo() {
+  if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    local L1='\033[38;5;183m' L2='\033[38;5;141m' L3='\033[38;5;99m'
+    local L4='\033[38;5;92m'  L5='\033[38;5;55m'
+    local LB='\033[1m' LD='\033[2m' LE='\033[0m'
+    printf '\n'
+    printf "  ${LB}${L3}▄▀█ █░█ ▀█▀ █▀█    █░░ █░░ █▀▄▀█${LE}\n"
+    printf "  ${LB}${L4}█▀█ █▄█ ░█░ █▄█    █▄▄ █▄▄ █░▀░█${LE}\n"
+    printf "  ${L2}          ◆ ${LB}${L5}W A R D E N${LE}${L2} ◆${LE}\n"
+    printf "  ${LD}${L5}    prompt-flow firewall for LLMs${LE}\n"
+    printf '\n'
+  else
+    printf '\n  AUTO LLM  ◆  WARDEN\n  prompt-flow firewall for LLMs\n\n'
+  fi
+}
+print_logo
+
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C1='\033[1;35m'; OK='\033[32m✔\033[0m'; WARN='\033[33m!\033[0m'; END='\033[0m'
 else
@@ -55,15 +73,38 @@ if [ -r /etc/os-release ]; then
   esac
 fi
 
-# ── 1. Disable GNOME proxy (for the user AND for root, in case an older buggy
-#       install run wrote it under sudo without dropping privileges) ──────
+# ── 1. Restore pre-warden GNOME proxy state from snapshot, or disable ─────
+# SAFETY: the installer wrote ~/.config/warden/state.json with the *original*
+# gsettings values before flipping anything. Restore those; only fall back
+# to mode=none if no snapshot exists. This keeps a user's pre-existing
+# corporate / SOCKS proxy intact across install→uninstall cycles.
+WARDEN_STATE_FILE="$TARGET_HOME/.config/warden/state.json"
 DESKTOP="${XDG_CURRENT_DESKTOP:-}${DESKTOP_SESSION:+:$DESKTOP_SESSION}"
 case "$DESKTOP" in
   *GNOME*|*Unity*|*ubuntu*|*Cinnamon*|*MATE*)
     if command -v gsettings >/dev/null; then
-      step "Disabling GNOME system proxy for $TARGET_USER"
-      run_as_user gsettings set org.gnome.system.proxy mode 'none' || true
-      ok "GNOME proxy off (user session)"
+      if run_as_user test -f "$WARDEN_STATE_FILE"; then
+        step "Restoring pre-warden GNOME proxy state from $WARDEN_STATE_FILE"
+        run_as_user python3 - "$WARDEN_STATE_FILE" <<'PY'
+import json, subprocess, sys, pathlib
+state = json.loads(pathlib.Path(sys.argv[1]).read_text()).get("linux_gsettings", {})
+def setv(schema, key, val):
+    if val == "" or val is None: return
+    subprocess.call(["gsettings","set",schema,key,val])
+mode = state.get("mode") or "'none'"
+setv("org.gnome.system.proxy.http",  "host",  state.get("http_host"))
+setv("org.gnome.system.proxy.http",  "port",  state.get("http_port"))
+setv("org.gnome.system.proxy.https", "host",  state.get("https_host"))
+setv("org.gnome.system.proxy.https", "port",  state.get("https_port"))
+setv("org.gnome.system.proxy",       "ignore-hosts", state.get("ignore_hosts"))
+setv("org.gnome.system.proxy",       "mode", mode)
+PY
+        ok "GNOME proxy restored to original state"
+      else
+        step "No snapshot found — disabling GNOME system proxy for $TARGET_USER"
+        run_as_user gsettings set org.gnome.system.proxy mode 'none' || true
+        ok "GNOME proxy off (user session)"
+      fi
     fi
     ;;
   *)
@@ -75,6 +116,9 @@ esac
 if command -v gsettings >/dev/null; then
   sudo gsettings set org.gnome.system.proxy mode 'none' >/dev/null 2>&1 || true
 fi
+# Snapshot is single-use: remove it after restore so the next install
+# captures a fresh baseline.
+[ -f "$WARDEN_STATE_FILE" ] && rm -f "$WARDEN_STATE_FILE" && ok "Removed proxy-state snapshot"
 
 # ── 2. Remove CA from the system trust store ───────────────────────────────
 step "Removing mitmproxy CA from system trust store"
@@ -204,9 +248,19 @@ if [ -e "$CA_FILE" ]; then
 fi
 
 # ── 6. Force-quit browsers so they re-read trust on next launch ────────────
-if pgrep -u "$TARGET_USER" -f 'chrome|chromium|firefox' >/dev/null 2>&1; then
+# SAFETY: match by exact binary name (not -f against full cmdline) so we
+# can't accidentally kill `chromedriver`, `chrome-pdf-helper`, or any other
+# tool that happens to contain "chrome" in its argv.
+BROWSER_BINS="chrome chromium chromium-browser google-chrome google-chrome-stable firefox firefox-bin firefox-esr"
+killed_any=0
+for proc in $BROWSER_BINS; do
+  if pgrep -u "$TARGET_USER" -x "$proc" >/dev/null 2>&1; then
+    run_as_user pkill -x "$proc" >/dev/null 2>&1 || true
+    killed_any=1
+  fi
+done
+if [ "$killed_any" -eq 1 ]; then
   step "Closing Chrome / Chromium / Firefox so they re-read NSS trust on next launch"
-  run_as_user pkill -f 'chrome|chromium|firefox' >/dev/null 2>&1 || true
   sleep 1
   ok "Browsers closed"
 fi

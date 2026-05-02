@@ -10,6 +10,24 @@ set -euo pipefail
 
 CA_FILE="${CA_FILE:-./mitmproxy-ca.pem}"
 
+# ── Brand logo (printed before any other output for instant recall) ────────
+print_logo() {
+  if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    local L1='\033[38;5;183m' L2='\033[38;5;141m' L3='\033[38;5;99m'
+    local L4='\033[38;5;92m'  L5='\033[38;5;55m'
+    local LB='\033[1m' LD='\033[2m' LE='\033[0m'
+    printf '\n'
+    printf "  ${LB}${L3}▄▀█ █░█ ▀█▀ █▀█    █░░ █░░ █▀▄▀█${LE}\n"
+    printf "  ${LB}${L4}█▀█ █▄█ ░█░ █▄█    █▄▄ █▄▄ █░▀░█${LE}\n"
+    printf "  ${L2}          ◆ ${LB}${L5}W A R D E N${LE}${L2} ◆${LE}\n"
+    printf "  ${LD}${L5}    prompt-flow firewall for LLMs${LE}\n"
+    printf '\n'
+  else
+    printf '\n  AUTO LLM  ◆  WARDEN\n  prompt-flow firewall for LLMs\n\n'
+  fi
+}
+print_logo
+
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C1='\033[1;35m'; OK='\033[32m✔\033[0m'; WARN='\033[33m!\033[0m'; END='\033[0m'
 else
@@ -28,14 +46,45 @@ while IFS= read -r svc; do
   fi
 done < <(networksetup -listallnetworkservices | tail -n +2)
 
+# SAFETY: restore the user's *original* proxy state from the install-time
+# snapshot at ~/.config/warden/state.json. Falls back to "all proxies off"
+# if no snapshot exists. This protects pre-existing corporate / SOCKS
+# proxies from being silently nuked across install→uninstall cycles.
+WARDEN_STATE_FILE="$HOME/.config/warden/state.json"
 if [ -n "$SERVICE" ]; then
-  step "Disabling system proxy on '$SERVICE'"
-  sudo networksetup -setwebproxystate       "$SERVICE" off || true
-  sudo networksetup -setsecurewebproxystate "$SERVICE" off || true
-  ok "System proxy off"
+  if [ -f "$WARDEN_STATE_FILE" ] && command -v python3 >/dev/null; then
+    step "Restoring pre-warden macOS proxy state from $WARDEN_STATE_FILE"
+    eval "$(python3 - "$WARDEN_STATE_FILE" <<'PY'
+import json, sys, pathlib, shlex
+s = json.loads(pathlib.Path(sys.argv[1]).read_text()).get("mac_networksetup", {})
+svc = s.get("service","")
+web = s.get("web", {}); sweb = s.get("secure_web", {}); bypass = s.get("bypass", []) or []
+def emit(*args): print(" ".join(shlex.quote(a) for a in args))
+if svc:
+    if web.get("server") and web.get("port"):
+        emit("sudo","networksetup","-setwebproxy",svc,web["server"],str(web["port"]))
+    emit("sudo","networksetup","-setwebproxystate",svc,"on" if web.get("enabled") else "off")
+    if sweb.get("server") and sweb.get("port"):
+        emit("sudo","networksetup","-setsecurewebproxy",svc,sweb["server"],str(sweb["port"]))
+    emit("sudo","networksetup","-setsecurewebproxystate",svc,"on" if sweb.get("enabled") else "off")
+    if bypass:
+        emit("sudo","networksetup","-setproxybypassdomains",svc,*bypass)
+    else:
+        emit("sudo","networksetup","-setproxybypassdomains",svc,"Empty")
+PY
+)" || warn "Snapshot restore script returned non-zero (proxy may still be off)."
+    ok "macOS proxy restored to original state"
+  else
+    step "No snapshot found — disabling system proxy on '$SERVICE'"
+    sudo networksetup -setwebproxystate       "$SERVICE" off || true
+    sudo networksetup -setsecurewebproxystate "$SERVICE" off || true
+    ok "System proxy off"
+  fi
 else
   warn "No active network service found — skipping proxy-off step."
 fi
+# Snapshot is single-use: remove it after restore.
+[ -f "$WARDEN_STATE_FILE" ] && rm -f "$WARDEN_STATE_FILE" && ok "Removed proxy-state snapshot"
 
 # ── Remove CA(s) ──────────────────────────────────────────────────────────
 step "Removing mitmproxy CA(s) from System keychain"
@@ -55,6 +104,62 @@ else
   warn "No mitmproxy CA found in System keychain (already clean)."
 fi
 
+# ── Strip the warden proxy block from shell rc files ──────────────────────
+WARDEN_RC_BEGIN="# >>> warden proxy >>>"
+WARDEN_RC_END="# <<< warden proxy <<<"
+for rc in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc"; do
+  [ -f "$rc" ] || continue
+  if grep -qF "$WARDEN_RC_BEGIN" "$rc" 2>/dev/null; then
+    python3 - "$rc" "$WARDEN_RC_BEGIN" "$WARDEN_RC_END" <<'PY'
+import sys, pathlib, re
+rc, begin, end = sys.argv[1], sys.argv[2], sys.argv[3]
+p = pathlib.Path(rc)
+text = p.read_text()
+pattern = re.compile(re.escape(begin) + r"[\s\S]*?" + re.escape(end) + r"\n?", re.MULTILINE)
+new = pattern.sub("", text).rstrip() + "\n"
+if new != text:
+    p.write_text(new)
+PY
+    ok "Stripped warden block from $rc"
+  fi
+done
+
+# ── Unwire Claude Code if install-mac.sh wired it up ───────────────────────
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+CA_STABLE="$HOME/.config/warden/mitmproxy-ca.pem"
+if [ -f "$CLAUDE_SETTINGS" ] && command -v python3 >/dev/null; then
+  step "Removing Warden env entries from $CLAUDE_SETTINGS"
+  python3 - "$CLAUDE_SETTINGS" <<'PY'
+import json, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+try:
+    data = json.loads(p.read_text())
+except (json.JSONDecodeError, FileNotFoundError):
+    sys.exit(0)
+if not isinstance(data, dict): sys.exit(0)
+env = data.get("env")
+if not isinstance(env, dict): sys.exit(0)
+removed = False
+for k in ("HTTPS_PROXY", "HTTP_PROXY", "NODE_EXTRA_CA_CERTS"):
+    if k in env:
+        del env[k]; removed = True
+if not env:
+    data.pop("env", None)
+else:
+    data["env"] = env
+if removed:
+    p.write_text(json.dumps(data, indent=2) + "\n")
+PY
+  ok "Cleaned Claude Code settings"
+fi
+
+# ── Stable CA copy cleanup ────────────────────────────────────────────────
+if [ -f "$CA_STABLE" ]; then
+  rm -f "$CA_STABLE"
+  rmdir "$(dirname "$CA_STABLE")" 2>/dev/null || true
+  ok "Removed stable CA at $CA_STABLE"
+fi
+
 # ── Optional file cleanup ─────────────────────────────────────────────────
 if [ -f "$CA_FILE" ]; then
   step "Deleting $CA_FILE"
@@ -62,11 +167,31 @@ if [ -f "$CA_FILE" ]; then
   ok "Removed $CA_FILE"
 fi
 
+# ── Force-quit browsers so they re-read trust on next launch ──────────────
+# SAFETY: ask the actual GUI apps to quit via Apple Events instead of
+# pkill -f. Apple Events target real apps only — they can never match an
+# unrelated CLI tool that happens to contain "chrome" in its argv. The
+# apps prompt for unsaved-tab confirmation themselves.
+BROWSER_APPS=("Google Chrome" "Chromium" "Firefox" "Arc" "Brave Browser" "Safari" "Microsoft Edge")
+quit_attempted=0
+for app in "${BROWSER_APPS[@]}"; do
+  if osascript -e "tell application \"System Events\" to (name of processes) contains \"$app\"" 2>/dev/null | grep -qi true; then
+    osascript -e "tell application \"$app\" to quit" >/dev/null 2>&1 || true
+    quit_attempted=1
+  fi
+done
+if [ "$quit_attempted" -eq 1 ]; then
+  step "Asked browsers to quit (will prompt about unsaved work if any)"
+  ok "Browsers closing — reopen them to pick up the trust change"
+fi
+
 cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  System proxy disabled, CA removed. Browser traffic is no longer
-  intercepted. The Docker stack is still running (run
-  'docker compose down' to stop it).
+  System proxy disabled, CA removed (system + stable copy), terminal
+  env vars stripped, Claude Code settings cleaned, browsers closed.
+  The Docker stack is still running (run 'docker compose down' to stop).
+
+  To start fresh:  bash scripts/install-mac.sh
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF

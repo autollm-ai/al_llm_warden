@@ -22,7 +22,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from warden import classifier as _cls
-from warden.database import EventStore
+from warden import dcg as _dcg
+from warden import domains as _domains
+from warden.database import DomainStore, EventStore, Event, now_iso
 from warden.identity import IdentityMemory
 
 app = FastAPI(title="LLM Warden", version="0.1.0")
@@ -38,6 +40,8 @@ _store = EventStore()
 _identity = IdentityMemory()
 _tok_path, _model_path = _cls.default_paths()
 _classifier = _cls.Classifier.from_paths(_tok_path, _model_path)
+_domain_store = DomainStore()
+_domain_store.ensure_seeded(_domains.SHADOW_AI_DOMAINS)
 
 _FRONTEND_DIR = Path(os.environ.get("WARDEN_FRONTEND_DIR", "/app/frontend"))
 
@@ -47,6 +51,30 @@ _TEST_MODE_PATH = Path(os.environ.get("WARDEN_TEST_MODE_PATH", "/data/warden-tes
 
 class ClassifyBody(BaseModel):
     text: str
+
+
+class DomainBody(BaseModel):
+    host: str
+    label: str | None = None
+
+
+class DomainPatchBody(BaseModel):
+    enabled: bool
+
+
+class AdminPurgeBody(BaseModel):
+    """Request body for /api/admin/purge.
+
+    Three escalating scopes — each strictly larger than the previous:
+      • events            — wipe events table only (preserves domains, identity)
+      • events_and_admin  — also wipes domains + identity (re-seeds defaults)
+      • full              — drops everything in the DB (irreversible)
+
+    `confirm` MUST be true; otherwise the call is rejected. This protects
+    against accidental triggering by a stray curl from a script.
+    """
+    scope: str = "events"
+    confirm: bool = False
 
 
 @app.get("/api/test-mode")
@@ -104,6 +132,149 @@ def identity_forget(kind: str, value: str) -> dict:
     return {"deleted": True, "kind": kind, "value": value}
 
 
+# ── Monitored-domain registry (live-edit from the UI) ────────────────────────
+@app.get("/api/domains")
+def domains_list() -> dict:
+    """All known domains (seeded + user-added). The proxy ignores anything
+    not in this list with enabled=1."""
+    return {"domains": _domain_store.list()}
+
+
+@app.post("/api/domains")
+def domains_add(body: DomainBody) -> dict:
+    try:
+        row = _domain_store.add(body.host, body.label or body.host)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    _domains.invalidate_cache()
+    return row
+
+
+@app.delete("/api/domains/{host}")
+def domains_remove(host: str) -> dict:
+    if not _domain_store.remove(host):
+        raise HTTPException(404, f"no domain {host!r}")
+    _domains.invalidate_cache()
+    return {"deleted": True, "host": host}
+
+
+@app.patch("/api/domains/{host}")
+def domains_patch(host: str, body: DomainPatchBody) -> dict:
+    if not _domain_store.set_enabled(host, body.enabled):
+        raise HTTPException(404, f"no domain {host!r}")
+    _domains.invalidate_cache()
+    return {"host": host, "enabled": body.enabled}
+
+
+# ── Audited destructive purge ──────────────────────────────────────────────
+# Ops on Warden's own state never go through the proxy (localhost is in
+# NO_PROXY and warden's own host isn't in SHADOW_AI_DOMAINS), so they'd
+# otherwise escape every monitoring tier. This endpoint closes that gap:
+# it runs the destructive SQL through DCG first, writes an audit event
+# with direction='admin' BEFORE executing, then performs the purge.
+# The audit row survives even if the SQL fails — so a partial purge or
+# permission denial is still discoverable on the dashboard.
+_ADMIN_SCOPES = {
+    "events": [
+        "DELETE FROM events",
+        "DELETE FROM sqlite_sequence WHERE name='events'",
+    ],
+    "events_and_admin": [
+        "DELETE FROM events",
+        "DELETE FROM domains",
+        "DELETE FROM sqlite_sequence",
+    ],
+    "full": [
+        "DROP TABLE IF EXISTS events",
+        "DROP TABLE IF EXISTS domains",
+    ],
+}
+
+
+@app.post("/api/admin/purge")
+def admin_purge(body: AdminPurgeBody) -> dict:
+    if body.scope not in _ADMIN_SCOPES:
+        raise HTTPException(400, f"unknown scope {body.scope!r}; valid: {sorted(_ADMIN_SCOPES)}")
+    if not body.confirm:
+        raise HTTPException(400, "refusing to purge without confirm=true")
+
+    sql_statements = _ADMIN_SCOPES[body.scope]
+    sql_text = ";\n".join(sql_statements) + ";"
+
+    # 1. Run the synthesized SQL through DCG so the destructive intent is
+    # scored on the same scale as outbound LLM traffic. `sql_delete_no_where`
+    # and `sql_drop_table` will both fire; that's intentional — purges are
+    # supposed to be loud in the audit trail.
+    dcg_hits, dcg_score = _dcg.scan(sql_text)
+    label = "critical" if dcg_score >= 0.85 else "high" if dcg_score >= 0.65 else "medium"
+
+    # 2. Write the audit event up-front, with direction='admin' so it shows
+    # up in the dashboard's direction filter as a separate channel.
+    audit = Event(
+        ts=now_iso(),
+        host="warden-internal",
+        provider="Warden Admin",
+        method="POST",
+        path=f"/api/admin/purge:{body.scope}",
+        sensitivity=dcg_score,
+        tier1_score=dcg_score,
+        tier2_score=0.0,
+        label=label,
+        categories=sorted({h.category for h in dcg_hits}),
+        hits=[{"name": h.name, "category": h.category,
+               "weight": h.weight, "snippet": h.snippet, "span": list(h.span)}
+              for h in dcg_hits],
+        summary=f"administrative purge requested (scope={body.scope})",
+        bytes_out=len(sql_text),
+        sample=sql_text,
+        intent="admin",
+        intent_conf=1.0,
+        effective_sensitivity=dcg_score,
+        direction="admin",
+    )
+    audit_id = _store.insert(audit)
+
+    # 3. Execute. Each statement is run separately so a failure mid-purge
+    # leaves the rest skippable; we collect rowcounts per statement.
+    import sqlite3
+    affected: list[dict] = []
+    error: str | None = None
+    try:
+        with sqlite3.connect(_store.path, timeout=10) as conn:
+            for stmt in sql_statements:
+                try:
+                    cur = conn.execute(stmt)
+                    affected.append({"sql": stmt, "rowcount": cur.rowcount})
+                except sqlite3.Error as e:
+                    affected.append({"sql": stmt, "error": str(e)})
+            conn.execute("VACUUM")
+            conn.commit()
+    except Exception as e:
+        error = str(e)
+
+    # 4. If we wiped the schema (scope='full'), recreate it so the proxy
+    # doesn't crash on next insert. ensure_seeded() also restores domains.
+    if body.scope == "full":
+        _store.__init__(_store.path)              # re-runs _SCHEMA + migrations
+        _domain_store.__init__(_domain_store.path)
+        _domain_store.ensure_seeded(_domains.SHADOW_AI_DOMAINS)
+    elif body.scope == "events_and_admin":
+        # Domains table was emptied — re-seed defaults so the proxy
+        # doesn't go blind.
+        _domain_store.ensure_seeded(_domains.SHADOW_AI_DOMAINS)
+
+    _domains.invalidate_cache()
+    return {
+        "audit_event_id": audit_id,
+        "scope": body.scope,
+        "dcg_score": dcg_score,
+        "dcg_hits": [h.name for h in dcg_hits],
+        "label": label,
+        "executed": affected,
+        "error": error,
+    }
+
+
 @app.get("/api/health")
 def health() -> dict:
     return {
@@ -126,10 +297,11 @@ def events(
     provider: str | None = None,
     min_sensitivity: float | None = Query(None, ge=0.0, le=1.0),
     intent: str | None = None,
+    direction: str | None = Query(None, regex="^(request|response)$"),
 ) -> dict:
     rows = _store.list_events(
         limit=limit, offset=offset, provider=provider,
-        min_sensitivity=min_sensitivity, intent=intent,
+        min_sensitivity=min_sensitivity, intent=intent, direction=direction,
     )
     return {"events": rows, "limit": limit, "offset": offset}
 

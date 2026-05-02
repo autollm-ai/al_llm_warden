@@ -19,6 +19,25 @@ PROXY_HOST="${PROXY_HOST:-127.0.0.1}"
 PROXY_PORT="${PROXY_PORT:-8080}"
 DASHBOARD_URL="${DASHBOARD_URL:-http://localhost:8090}"
 
+# ── Brand logo (printed before any other output for instant recall) ────────
+print_logo() {
+  if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    # Purple gradient sampled from the AutoLLM mark (#C8B3FE → #421C99).
+    local L1='\033[38;5;183m' L2='\033[38;5;141m' L3='\033[38;5;99m'
+    local L4='\033[38;5;92m'  L5='\033[38;5;55m'
+    local LB='\033[1m' LD='\033[2m' LE='\033[0m'
+    printf '\n'
+    printf "  ${LB}${L3}▄▀█ █░█ ▀█▀ █▀█    █░░ █░░ █▀▄▀█${LE}\n"
+    printf "  ${LB}${L4}█▀█ █▄█ ░█░ █▄█    █▄▄ █▄▄ █░▀░█${LE}\n"
+    printf "  ${L2}          ◆ ${LB}${L5}W A R D E N${LE}${L2} ◆${LE}\n"
+    printf "  ${LD}${L5}    prompt-flow firewall for LLMs${LE}\n"
+    printf '\n'
+  else
+    printf '\n  AUTO LLM  ◆  WARDEN\n  prompt-flow firewall for LLMs\n\n'
+  fi
+}
+print_logo
+
 # ── Pretty output ───────────────────────────────────────────────────────────
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C1='\033[1;35m'; OK='\033[32m✔\033[0m'; FAIL='\033[31m✘\033[0m'
@@ -34,8 +53,41 @@ warn()  { printf "  %b %s\n" "$WARN" "$*"; }
 note()  { printf "  ${DIM}%s${END}\n" "$*"; }
 
 [ "$(uname -s)" = "Darwin" ] || fail "This installer is for macOS. On Linux, run scripts/install-linux.sh."
-command -v docker >/dev/null   || fail "Docker not found. Install Docker Desktop or Colima first."
 command -v networksetup >/dev/null || fail "networksetup not found — are you on macOS?"
+
+# ── Docker: auto-install if missing ────────────────────────────────────────
+# We install Colima (lightweight Linux-VM Docker runtime) + the Docker CLI
+# via Homebrew. Docker Desktop has a license-acceptance UI that we can't
+# automate, so Colima is the right default for a one-shot installer. The
+# user can swap in Docker Desktop later if they prefer.
+install_docker() {
+  step "Docker not found on host — installing Colima + Docker CLI via Homebrew"
+  if ! command -v brew >/dev/null; then
+    fail "Homebrew not found. Install it from https://brew.sh, then re-run this installer.
+       Alternatively, install Docker Desktop from https://www.docker.com/products/docker-desktop/ and re-run."
+  fi
+  brew install colima docker docker-compose
+  step "Starting Colima (this spins up a small Linux VM — first start can take ~1 min)"
+  if ! colima status >/dev/null 2>&1; then
+    colima start || fail "colima failed to start. Try 'colima start --verbose' to see why."
+  fi
+  command -v docker >/dev/null || fail "Docker install reported success but 'docker' is still missing."
+  ok "Docker installed (Colima backend)"
+}
+
+if ! command -v docker >/dev/null; then
+  install_docker
+elif ! docker info >/dev/null 2>&1; then
+  # Docker CLI is present but the daemon isn't reachable. On mac that usually
+  # means Docker Desktop / Colima isn't started — try to nudge Colima awake
+  # since that's the runtime we'd install ourselves.
+  if command -v colima >/dev/null; then
+    step "Docker daemon not reachable — starting Colima"
+    colima start || fail "colima failed to start. Open Docker Desktop manually, or run 'colima start --verbose'."
+  else
+    fail "Docker daemon not reachable. Start Docker Desktop, then re-run this installer."
+  fi
+fi
 
 # ── 1. Detect the active network service ───────────────────────────────────
 step "Detecting active network service"
@@ -78,6 +130,51 @@ sudo security add-trusted-cert -d -r trustRoot \
 ok "CA trusted system-wide"
 
 # ── 5. Flip macOS proxy ────────────────────────────────────────────────────
+# SAFETY: snapshot the user's *current* networksetup proxy state to
+# ~/.config/warden/state.json BEFORE we flip anything, so the uninstaller
+# can restore an original SOCKS / corporate proxy instead of just turning
+# all proxies off. We only write the snapshot if one doesn't already
+# exist — a re-run mustn't capture warden's own state as the "original".
+WARDEN_STATE_DIR="$HOME/.config/warden"
+WARDEN_STATE_FILE="$WARDEN_STATE_DIR/state.json"
+mkdir -p "$WARDEN_STATE_DIR"
+if [ ! -f "$WARDEN_STATE_FILE" ]; then
+  step "Snapshotting current macOS proxy state → $WARDEN_STATE_FILE (so uninstall can restore it)"
+  python3 - "$WARDEN_STATE_FILE" "$SERVICE" <<'PY'
+import json, subprocess, sys, pathlib, re
+state_path, service = sys.argv[1], sys.argv[2]
+def info(cmd):
+    try:
+        return subprocess.check_output(cmd, text=True)
+    except Exception:
+        return ""
+def parse(text):
+    out = {}
+    for line in text.splitlines():
+        if ":" in line:
+            k, _, v = line.partition(":")
+            out[k.strip().lower()] = v.strip()
+    return out
+web    = parse(info(["networksetup","-getwebproxy",       service]))
+secure = parse(info(["networksetup","-getsecurewebproxy", service]))
+bypass = info(["networksetup","-getproxybypassdomains", service]).strip().splitlines()
+state = {
+  "mac_networksetup": {
+    "service":    service,
+    "web":        {"enabled": web.get("enabled","No") == "Yes",
+                   "server":  web.get("server",""), "port": web.get("port","")},
+    "secure_web": {"enabled": secure.get("enabled","No") == "Yes",
+                   "server":  secure.get("server",""), "port": secure.get("port","")},
+    "bypass":     [b for b in bypass if b and b != "There aren't any bypass domains set on this network service."],
+  }
+}
+pathlib.Path(state_path).write_text(json.dumps(state, indent=2))
+PY
+  ok "Snapshot written"
+else
+  note "Existing $WARDEN_STATE_FILE — keeping the original snapshot intact."
+fi
+
 step "Enabling system HTTP+HTTPS proxy → ${PROXY_HOST}:${PROXY_PORT}"
 sudo networksetup -setwebproxy           "$SERVICE" "$PROXY_HOST" "$PROXY_PORT"
 sudo networksetup -setsecurewebproxy     "$SERVICE" "$PROXY_HOST" "$PROXY_PORT"
@@ -86,6 +183,44 @@ sudo networksetup -setsecurewebproxystate "$SERVICE" on
 sudo networksetup -setproxybypassdomains "$SERVICE" \
   "localhost" "127.0.0.1" "*.local" "169.254/16"
 ok "System proxy set"
+
+# ─── Terminal-CLI proxy ────────────────────────────────────────────────────
+# networksetup only routes apps that read the macOS system proxy (Safari,
+# Chrome, Arc, GUI Slack, etc.). Terminal CLIs (curl, python, node,
+# claude-code, gh, brew) read HTTP_PROXY/HTTPS_PROXY env vars and would
+# otherwise bypass warden entirely. Write the exports to ~/.zshrc (the
+# default shell since Catalina) and ~/.bash_profile if present.
+# Idempotent: a marker block is replaced on every run.
+step "Wiring terminal CLIs through warden (~/.zshrc, ~/.bash_profile)"
+WARDEN_RC_BEGIN="# >>> warden proxy >>>"
+WARDEN_RC_END="# <<< warden proxy <<<"
+# Stable CA path so settings.json / env vars don't break if the user moves
+# the repo. ~/.config/warden/mitmproxy-ca.pem is the canonical home.
+mkdir -p "$HOME/.config/warden"
+cp -f "$CA_FILE" "$HOME/.config/warden/mitmproxy-ca.pem"
+WARDEN_RC_BLOCK="$WARDEN_RC_BEGIN
+export HTTP_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
+export HTTPS_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
+export ALL_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
+export NO_PROXY=localhost,127.0.0.1,::1
+export REQUESTS_CA_BUNDLE=$HOME/.config/warden/mitmproxy-ca.pem
+export SSL_CERT_FILE=$HOME/.config/warden/mitmproxy-ca.pem
+$WARDEN_RC_END"
+
+for rc in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc"; do
+  [ -f "$rc" ] || continue
+  python3 - "$rc" "$WARDEN_RC_BEGIN" "$WARDEN_RC_END" "$WARDEN_RC_BLOCK" <<'PY'
+import sys, pathlib, re
+rc, begin, end, block = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+p = pathlib.Path(rc)
+text = p.read_text()
+pattern = re.compile(re.escape(begin) + r"[\s\S]*?" + re.escape(end) + r"\n?", re.MULTILINE)
+text = pattern.sub("", text).rstrip() + "\n\n" + block + "\n"
+p.write_text(text)
+PY
+  ok "Patched $rc"
+done
+note "Open a new terminal (or run 'source ~/.zshrc') for env vars to take effect."
 
 # ── 6. Verify ──────────────────────────────────────────────────────────────
 step "Verifying the proxy is in the path"
@@ -98,10 +233,92 @@ else
   warn "Couldn't reach api.openai.com (offline?) — that's fine; the proxy is still active."
 fi
 
-if curl -sS --max-time 5 "$DASHBOARD_URL/api/health" >/dev/null 2>&1; then
+if curl -sS --max-time 5 --noproxy '*' "$DASHBOARD_URL/api/health" >/dev/null 2>&1; then
   ok "Dashboard responding on $DASHBOARD_URL"
 else
   warn "Dashboard not responding on $DASHBOARD_URL — start with 'docker compose up'."
+fi
+
+# ── 7. Optionally wire Claude Code (and other Anthropic clients) ───────────
+#       through the proxy by editing ~/.claude/settings.json in place.
+configure_claude_code() {
+  if ! command -v python3 >/dev/null; then
+    warn "python3 not found — can't safely merge ~/.claude/settings.json. Skipping Claude Code config."
+    return
+  fi
+  CA_STABLE="$HOME/.config/warden/mitmproxy-ca.pem"
+  CLAUDE_DIR="$HOME/.claude"
+  CLAUDE_SETTINGS="$CLAUDE_DIR/settings.json"
+  mkdir -p "$CLAUDE_DIR"
+  # SAFETY: keep a one-time pristine backup of the user's pre-warden
+  # settings. Never overwritten on subsequent runs.
+  if [ -f "$CLAUDE_SETTINGS" ] && [ ! -f "$CLAUDE_SETTINGS.warden-pre-patch.bak" ]; then
+    cp -f "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.warden-pre-patch.bak"
+    ok "Backed up original settings to $CLAUDE_SETTINGS.warden-pre-patch.bak"
+  fi
+  python3 - "$CLAUDE_SETTINGS" "$CA_STABLE" "http://${PROXY_HOST}:${PROXY_PORT}" <<'PY'
+import json, sys, pathlib
+path, ca, proxy = sys.argv[1], sys.argv[2], sys.argv[3]
+p = pathlib.Path(path)
+data = {}
+if p.exists() and p.stat().st_size > 0:
+    try:
+        data = json.loads(p.read_text())
+    except json.JSONDecodeError:
+        backup = p.with_suffix(p.suffix + ".warden-backup")
+        p.replace(backup)
+        print(f"  ! existing {path} was not valid JSON — backed up to {backup} and rewriting.")
+        data = {}
+if not isinstance(data, dict):
+    data = {}
+env = data.get("env") if isinstance(data.get("env"), dict) else {}
+env["HTTPS_PROXY"] = proxy
+env["HTTP_PROXY"] = proxy
+env["NODE_EXTRA_CA_CERTS"] = ca
+data["env"] = env
+p.write_text(json.dumps(data, indent=2) + "\n")
+PY
+  ok "Patched $CLAUDE_SETTINGS (HTTPS_PROXY, HTTP_PROXY, NODE_EXTRA_CA_CERTS merged into env)"
+}
+
+case "${WARDEN_CLAUDE_CODE:-}" in
+  1|y|yes|true) DO_CLAUDE=1 ;;
+  0|n|no|false) DO_CLAUDE=0 ;;
+  *)
+    if [ -t 0 ]; then
+      printf "${C1}▶${END} Also protect Claude Code? (route the Anthropic SDK + claude.ai CLI through Warden) [y/N] "
+      read -r ans || ans=""
+      case "$ans" in y|Y|yes|YES) DO_CLAUDE=1 ;; *) DO_CLAUDE=0 ;; esac
+    else
+      DO_CLAUDE=0
+      note "Non-interactive run — skipping Claude Code config. Re-run with WARDEN_CLAUDE_CODE=1 to enable."
+    fi
+    ;;
+esac
+
+if [ "$DO_CLAUDE" = "1" ]; then
+  step "Configuring Claude Code (~/.claude/settings.json)"
+  configure_claude_code
+fi
+
+# ── 8. Force-quit browsers so they re-read trust on next launch ────────────
+# Newly-trusted CAs in the System keychain are picked up by Safari/Chrome
+# only on next launch. SAFETY: we ask the apps to quit via Apple Events
+# (osascript) instead of pkill -f. AppleScript "tell app to quit" only
+# targets the actual GUI app — it can't accidentally match a CLI process
+# that happens to contain "chrome" in its argv. Apps prompt the user
+# themselves if there are unsaved tabs/forms, so no work is silently lost.
+BROWSER_APPS=("Google Chrome" "Chromium" "Firefox" "Arc" "Brave Browser" "Safari" "Microsoft Edge")
+quit_attempted=0
+for app in "${BROWSER_APPS[@]}"; do
+  if osascript -e "tell application \"System Events\" to (name of processes) contains \"$app\"" 2>/dev/null | grep -qi true; then
+    step "Asking $app to quit (it'll prompt you about unsaved work if any)"
+    osascript -e "tell application \"$app\" to quit" >/dev/null 2>&1 || true
+    quit_attempted=1
+  fi
+done
+if [ "$quit_attempted" -eq 1 ]; then
+  ok "Browsers asked to quit — reopen them to pick up the new trust"
 fi
 
 cat <<EOF
@@ -112,6 +329,8 @@ cat <<EOF
   on the dashboard:
 
       $DASHBOARD_URL
+
+  Open a new terminal so the proxy env vars take effect for CLIs.
 
   To revert everything (turn proxy off, remove the CA):
 

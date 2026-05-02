@@ -23,6 +23,25 @@ PROXY_PORT="${PROXY_PORT:-8080}"
 DASHBOARD_URL="${DASHBOARD_URL:-http://localhost:8090}"
 CA_NICKNAME="warden-mitmproxy"
 
+# ── Brand logo (printed before any other output for instant recall) ────────
+print_logo() {
+  if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    # Purple gradient sampled from the AutoLLM mark (#C8B3FE → #421C99).
+    local L1='\033[38;5;183m' L2='\033[38;5;141m' L3='\033[38;5;99m'
+    local L4='\033[38;5;92m'  L5='\033[38;5;55m'
+    local LB='\033[1m' LD='\033[2m' LE='\033[0m'
+    printf '\n'
+    printf "  ${LB}${L3}▄▀█ █░█ ▀█▀ █▀█    █░░ █░░ █▀▄▀█${LE}\n"
+    printf "  ${LB}${L4}█▀█ █▄█ ░█░ █▄█    █▄▄ █▄▄ █░▀░█${LE}\n"
+    printf "  ${L2}          ◆ ${LB}${L5}W A R D E N${LE}${L2} ◆${LE}\n"
+    printf "  ${LD}${L5}    prompt-flow firewall for LLMs${LE}\n"
+    printf '\n'
+  else
+    printf '\n  AUTO LLM  ◆  WARDEN\n  prompt-flow firewall for LLMs\n\n'
+  fi
+}
+print_logo
+
 # ── Pretty output ───────────────────────────────────────────────────────────
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C1='\033[1;35m'; OK='\033[32m✔\033[0m'; FAIL='\033[31m✘\033[0m'
@@ -38,7 +57,6 @@ warn()  { printf "  %b %s\n" "$WARN" "$*"; }
 note()  { printf "  ${DIM}%s${END}\n" "$*"; }
 
 [ "$(uname -s)" = "Linux" ] || fail "This installer is for Linux. On macOS, run scripts/install-mac.sh."
-command -v docker >/dev/null || fail "Docker not found. Install Docker Engine + the compose plugin first."
 
 # Resolve the *invoking* user — when this script runs under sudo we still need
 # to apply gsettings to their GNOME session and write the CA into their NSS DB,
@@ -49,6 +67,77 @@ TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 TARGET_UID="$(id -u "$TARGET_USER")"
 TARGET_GROUP="$(id -gn "$TARGET_USER" 2>/dev/null || echo "$TARGET_USER")"
 [ -n "$TARGET_HOME" ] || fail "Couldn't resolve home directory for user '$TARGET_USER'."
+
+# ── Detect distro family early (used by both the docker installer below and
+#       the certutil + system-trust steps further down). ────────────────────
+DISTRO_FAMILY="unknown"
+if [ -r /etc/os-release ]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  case "${ID:-}:${ID_LIKE:-}" in
+    *debian*|*ubuntu*) DISTRO_FAMILY="debian" ;;
+    *fedora*|*rhel*|*centos*) DISTRO_FAMILY="rhel" ;;
+    *arch*|*manjaro*) DISTRO_FAMILY="arch" ;;
+    *suse*) DISTRO_FAMILY="suse" ;;
+  esac
+fi
+
+# ── Docker: auto-install if missing ────────────────────────────────────────
+# get.docker.com is the official convenience script — it picks the right
+# repo for the detected distro and pulls in the compose plugin too. We
+# prefer the distro package manager when we can match it cleanly (avoids
+# a curl|sh dance), but fall back to the convenience script otherwise.
+install_docker() {
+  step "Docker not found on host — installing Docker Engine + compose plugin (sudo required)"
+  case "$DISTRO_FAMILY" in
+    debian)
+      sudo apt-get update -qq
+      # Try the distro repo first; fall back to get.docker.com if it doesn't
+      # ship docker-compose-plugin (older Debian/Ubuntu).
+      if ! sudo apt-get install -y --no-install-recommends docker.io docker-compose-plugin 2>/dev/null; then
+        warn "distro repo missing docker-compose-plugin — falling back to get.docker.com"
+        curl -fsSL https://get.docker.com -o /tmp/warden-get-docker.sh
+        sudo sh /tmp/warden-get-docker.sh
+        rm -f /tmp/warden-get-docker.sh
+      fi
+      ;;
+    rhel)
+      curl -fsSL https://get.docker.com -o /tmp/warden-get-docker.sh
+      sudo sh /tmp/warden-get-docker.sh
+      rm -f /tmp/warden-get-docker.sh
+      ;;
+    arch)
+      sudo pacman -S --needed --noconfirm docker docker-compose
+      ;;
+    suse)
+      sudo zypper install -y docker docker-compose
+      ;;
+    *)
+      warn "Unknown distro — using the official get.docker.com convenience script."
+      curl -fsSL https://get.docker.com -o /tmp/warden-get-docker.sh
+      sudo sh /tmp/warden-get-docker.sh
+      rm -f /tmp/warden-get-docker.sh
+      ;;
+  esac
+  # Make the daemon start now AND on reboot; otherwise the wait-loop below
+  # hangs waiting for a daemon that systemd won't bring up.
+  if command -v systemctl >/dev/null; then
+    sudo systemctl enable --now docker >/dev/null 2>&1 || true
+  fi
+  # Add invoking user to the docker group so subsequent runs don't need sudo.
+  # Group membership only takes effect on the next login — warn loudly so the
+  # user knows why the *current* run still uses 'sudo docker'.
+  if getent group docker >/dev/null && ! id -nG "$TARGET_USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+    sudo usermod -aG docker "$TARGET_USER" || true
+    warn "Added $TARGET_USER to the 'docker' group — log out / back in (or run 'newgrp docker') for it to apply."
+  fi
+  command -v docker >/dev/null || fail "Docker install reported success but 'docker' is still missing — see the package-manager output above."
+  ok "Docker installed"
+}
+
+if ! command -v docker >/dev/null; then
+  install_docker
+fi
 
 # Run a command as the invoking user with their session bus + HOME, so that
 # gsettings hits their dconf and certutil writes their NSS DB.
@@ -113,19 +202,6 @@ fi
 if sudo test -d /root/.pki/nssdb 2>/dev/null && command -v certutil >/dev/null && \
    sudo certutil -d sql:/root/.pki/nssdb -L 2>/dev/null | grep -q "^${CA_NICKNAME}\b"; then
   sudo certutil -d sql:/root/.pki/nssdb -D -n "$CA_NICKNAME" >/dev/null 2>&1 || true
-fi
-
-# ── Detect distro family for the CA-trust step ─────────────────────────────
-DISTRO_FAMILY="unknown"
-if [ -r /etc/os-release ]; then
-  # shellcheck disable=SC1091
-  . /etc/os-release
-  case "${ID:-}:${ID_LIKE:-}" in
-    *debian*|*ubuntu*) DISTRO_FAMILY="debian" ;;
-    *fedora*|*rhel*|*centos*) DISTRO_FAMILY="rhel" ;;
-    *arch*|*manjaro*) DISTRO_FAMILY="arch" ;;
-    *suse*) DISTRO_FAMILY="suse" ;;
-  esac
 fi
 
 # ── 1. Wait for warden-proxy + the CA file ─────────────────────────────────
@@ -298,11 +374,46 @@ else
 fi
 
 # ── 5. Flip system proxy ───────────────────────────────────────────────────
+# SAFETY: snapshot the user's *current* gsettings proxy state to
+# ~/.config/warden/state.json BEFORE we flip anything, so the uninstaller
+# can restore an original SOCKS / corporate proxy instead of just turning
+# all proxies off. We only write the snapshot if one doesn't already exist
+# — this protects against a re-run capturing the warden-flipped state as
+# the "original" and cementing it on the next uninstall.
+WARDEN_STATE_DIR="$TARGET_HOME/.config/warden"
+WARDEN_STATE_FILE="$WARDEN_STATE_DIR/state.json"
+run_as_user mkdir -p "$WARDEN_STATE_DIR"
+
 PROXY_SET=0
 DESKTOP="${XDG_CURRENT_DESKTOP:-}${DESKTOP_SESSION:+:$DESKTOP_SESSION}"
 case "$DESKTOP" in
   *GNOME*|*Unity*|*ubuntu*|*Cinnamon*|*MATE*)
     if command -v gsettings >/dev/null; then
+      if ! run_as_user test -f "$WARDEN_STATE_FILE"; then
+        step "Snapshotting current GNOME proxy state → $WARDEN_STATE_FILE (so uninstall can restore it)"
+        run_as_user python3 - "$WARDEN_STATE_FILE" <<'PY'
+import json, subprocess, sys, pathlib
+def get(schema, key):
+    try:
+        return subprocess.check_output(["gsettings","get",schema,key], text=True).strip()
+    except Exception:
+        return ""
+state = {
+  "linux_gsettings": {
+    "mode":         get("org.gnome.system.proxy",       "mode"),
+    "http_host":    get("org.gnome.system.proxy.http",  "host"),
+    "http_port":    get("org.gnome.system.proxy.http",  "port"),
+    "https_host":   get("org.gnome.system.proxy.https", "host"),
+    "https_port":   get("org.gnome.system.proxy.https", "port"),
+    "ignore_hosts": get("org.gnome.system.proxy",       "ignore-hosts"),
+  }
+}
+pathlib.Path(sys.argv[1]).write_text(json.dumps(state, indent=2))
+PY
+        ok "Snapshot written"
+      else
+        note "Existing $WARDEN_STATE_FILE — keeping the original snapshot intact."
+      fi
       step "Enabling GNOME system proxy for $TARGET_USER → ${PROXY_HOST}:${PROXY_PORT}"
       run_as_user gsettings set org.gnome.system.proxy mode 'manual'
       run_as_user gsettings set org.gnome.system.proxy.http  host "$PROXY_HOST"
@@ -419,6 +530,14 @@ configure_claude_code() {
   CLAUDE_SETTINGS="$CLAUDE_DIR/settings.json"
   run_as_user mkdir -p "$CLAUDE_DIR"
 
+  # SAFETY: keep a one-time pristine backup of the user's pre-warden
+  # settings. We never overwrite it on subsequent runs, so even if a
+  # user inspects/diffs later they can see exactly what we changed.
+  if [ -f "$CLAUDE_SETTINGS" ] && [ ! -f "$CLAUDE_SETTINGS.warden-pre-patch.bak" ]; then
+    run_as_user cp -f "$CLAUDE_SETTINGS" "$CLAUDE_SETTINGS.warden-pre-patch.bak"
+    ok "Backed up original settings to $CLAUDE_SETTINGS.warden-pre-patch.bak"
+  fi
+
   run_as_user python3 - "$CLAUDE_SETTINGS" "$CA_STABLE" "http://${PROXY_HOST}:${PROXY_PORT}" <<'PY'
 import json, os, sys, pathlib
 path, ca, proxy = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -488,20 +607,30 @@ else
 fi
 
 # ── 9. Force-quit browsers so they re-read NSS trust on next launch ────────
-if pgrep -u "$TARGET_USER" -f 'chrome|chromium|firefox' >/dev/null 2>&1; then
+# SAFETY: match by *exact* binary name with `pgrep -x`, not `-f` against the
+# full cmdline. The old `-f 'chrome'` regex would also kill chromedriver,
+# chrome-pdf-helper, mychrome-tool, anything with "chrome" in its argv.
+BROWSER_BINS="chrome chromium chromium-browser google-chrome google-chrome-stable firefox firefox-bin firefox-esr"
+browsers_alive() {
+  for proc in $BROWSER_BINS; do
+    pgrep -u "$TARGET_USER" -x "$proc" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+if browsers_alive; then
   step "Closing Chrome / Chromium / Firefox so they re-read NSS trust on next launch"
-  # First a graceful pkill, then a hard SIGKILL on anything still running —
-  # Chrome's multi-process tree often survives a single -TERM, leaving a
-  # network-service helper that pins the old NSS view.
-  run_as_user pkill     -f 'chrome|chromium|firefox' >/dev/null 2>&1 || true
+  for proc in $BROWSER_BINS; do
+    run_as_user pkill -x "$proc" >/dev/null 2>&1 || true
+  done
   sleep 1
-  run_as_user pkill -9  -f 'chrome|chromium|firefox' >/dev/null 2>&1 || true
-  # Wait until they're actually gone (max ~5s).
+  for proc in $BROWSER_BINS; do
+    run_as_user pkill -9 -x "$proc" >/dev/null 2>&1 || true
+  done
   for _ in 1 2 3 4 5; do
-    pgrep -u "$TARGET_USER" -f 'chrome|chromium|firefox' >/dev/null 2>&1 || break
+    browsers_alive || break
     sleep 1
   done
-  if pgrep -u "$TARGET_USER" -f 'chrome|chromium|firefox' >/dev/null 2>&1; then
+  if browsers_alive; then
     warn "Some browser processes are still alive after SIGKILL — close any remaining windows manually before reopening."
   else
     ok "Browsers closed — reopen them to pick up the new trust"
