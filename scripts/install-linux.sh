@@ -391,26 +391,45 @@ case "$DESKTOP" in
     if command -v gsettings >/dev/null; then
       if ! run_as_user test -f "$WARDEN_STATE_FILE"; then
         step "Snapshotting current GNOME proxy state → $WARDEN_STATE_FILE (so uninstall can restore it)"
-        run_as_user python3 - "$WARDEN_STATE_FILE" <<'PY'
+        # SAFETY: refuse to snapshot a state that's already pointing at
+        # warden — that would mean a previous install run was interrupted
+        # before writing the snapshot, and capturing now would freeze
+        # warden's own values as the "original" so uninstall could never
+        # actually disable the proxy. Skip with a warning instead.
+        run_as_user python3 - "$WARDEN_STATE_FILE" "$PROXY_HOST" "$PROXY_PORT" <<'PY'
 import json, subprocess, sys, pathlib
+out, host, port = sys.argv[1], sys.argv[2], sys.argv[3]
 def get(schema, key):
     try:
         return subprocess.check_output(["gsettings","get",schema,key], text=True).strip()
     except Exception:
         return ""
-state = {
-  "linux_gsettings": {
+gs = {
     "mode":         get("org.gnome.system.proxy",       "mode"),
     "http_host":    get("org.gnome.system.proxy.http",  "host"),
     "http_port":    get("org.gnome.system.proxy.http",  "port"),
     "https_host":   get("org.gnome.system.proxy.https", "host"),
     "https_port":   get("org.gnome.system.proxy.https", "port"),
     "ignore_hosts": get("org.gnome.system.proxy",       "ignore-hosts"),
-  }
 }
-pathlib.Path(sys.argv[1]).write_text(json.dumps(state, indent=2))
+hh = gs["http_host"].strip("'").strip('"')
+hp = gs["http_port"]
+sh = gs["https_host"].strip("'").strip('"')
+sp = gs["https_port"]
+if gs["mode"] in ("'manual'", "manual") and \
+   (hh, hp) == (host, port) and (sh, sp) == (host, port):
+    print("WARDEN_PRE_FLIP", file=sys.stderr)
+    sys.exit(2)
+pathlib.Path(out).write_text(json.dumps({"linux_gsettings": gs}, indent=2))
 PY
-        ok "Snapshot written"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+          ok "Snapshot written"
+        elif [ "$rc" -eq 2 ]; then
+          warn "Skipped snapshot — current gsettings already point at warden (likely a re-install). Uninstall will fall back to mode=none."
+        else
+          warn "Snapshot script failed (rc=$rc) — uninstall will fall back to mode=none."
+        fi
       else
         note "Existing $WARDEN_STATE_FILE — keeping the original snapshot intact."
       fi
@@ -450,18 +469,50 @@ fi
 step "Wiring terminal CLIs through warden (~/.bashrc, ~/.zshrc, environment.d)"
 WARDEN_RC_BEGIN="# >>> warden proxy >>>"
 WARDEN_RC_END="# <<< warden proxy <<<"
+
+# Make sure the stable CA the env block points at exists, even if Claude
+# Code wasn't selected — terminal tools need it for TLS verification.
+run_as_user mkdir -p "$TARGET_HOME/.config/warden"
+run_as_user cp -f "$CA_FILE" "$TARGET_HOME/.config/warden/mitmproxy-ca.pem"
+
+# Build a *combined* CA bundle = system roots + mitmproxy CA. SAFETY:
+#   REQUESTS_CA_BUNDLE / SSL_CERT_FILE *replace* the trust store for tools
+#   that strictly honor them (Python, pip). Pointing them at the bare
+#   mitmproxy CA breaks any HTTPS that warden's proxy *passes through*
+#   unchanged — including pypi.org — because the leaf cert chains to a
+#   public CA (e.g. GlobalSign) that isn't in the bundle. The combined
+#   bundle keeps both pass-through and MITMd traffic verifiable, AND if
+#   uninstall fails to clean the env in an open shell, pip still works
+#   because the public CAs are present.
+COMBINED_BUNDLE="$TARGET_HOME/.config/warden/warden-ca-bundle.pem"
+SYS_BUNDLE=""
+for p in /etc/ssl/certs/ca-certificates.crt \
+         /etc/pki/tls/certs/ca-bundle.crt \
+         /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+         /var/lib/ca-certificates/ca-bundle.pem \
+         /etc/ssl/cert.pem; do
+  [ -f "$p" ] && SYS_BUNDLE="$p" && break
+done
+if [ -n "$SYS_BUNDLE" ]; then
+  TMP_BUNDLE="$(mktemp)"
+  cat "$SYS_BUNDLE" "$CA_FILE" > "$TMP_BUNDLE"
+  run_as_user mv -f "$TMP_BUNDLE" "$COMBINED_BUNDLE"
+  chown "$TARGET_USER:$TARGET_GROUP" "$COMBINED_BUNDLE" 2>/dev/null || true
+  chmod 0644 "$COMBINED_BUNDLE"
+  ok "Combined CA bundle written to $COMBINED_BUNDLE ($(wc -l < "$COMBINED_BUNDLE") lines)"
+else
+  warn "No system CA bundle found — falling back to bare mitmproxy CA. Pass-through HTTPS (e.g. pypi) may break for tools that strictly honor REQUESTS_CA_BUNDLE."
+  COMBINED_BUNDLE="$TARGET_HOME/.config/warden/mitmproxy-ca.pem"
+fi
+
 WARDEN_RC_BLOCK="$WARDEN_RC_BEGIN
 export HTTP_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export HTTPS_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export ALL_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export NO_PROXY=localhost,127.0.0.1,::1
-export REQUESTS_CA_BUNDLE=$TARGET_HOME/.config/warden/mitmproxy-ca.pem
-export SSL_CERT_FILE=$TARGET_HOME/.config/warden/mitmproxy-ca.pem
+export REQUESTS_CA_BUNDLE=$COMBINED_BUNDLE
+export SSL_CERT_FILE=$COMBINED_BUNDLE
 $WARDEN_RC_END"
-# Make sure the stable CA the env block points at exists, even if Claude
-# Code wasn't selected — terminal tools need it for TLS verification.
-run_as_user mkdir -p "$TARGET_HOME/.config/warden"
-run_as_user cp -f "$CA_FILE" "$TARGET_HOME/.config/warden/mitmproxy-ca.pem"
 
 for rc in "$TARGET_HOME/.bashrc" "$TARGET_HOME/.zshrc"; do
   [ -f "$rc" ] || continue
@@ -487,8 +538,8 @@ HTTP_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 HTTPS_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 ALL_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 NO_PROXY=localhost,127.0.0.1,::1
-REQUESTS_CA_BUNDLE=$TARGET_HOME/.config/warden/mitmproxy-ca.pem
-SSL_CERT_FILE=$TARGET_HOME/.config/warden/mitmproxy-ca.pem
+REQUESTS_CA_BUNDLE=$COMBINED_BUNDLE
+SSL_CERT_FILE=$COMBINED_BUNDLE
 EOF
 ok "Wrote $ENVD"
 note "Open a new terminal (or run 'source ~/.bashrc') for env vars to take effect."

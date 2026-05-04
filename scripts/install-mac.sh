@@ -247,24 +247,33 @@ WARDEN_STATE_FILE="$WARDEN_STATE_DIR/state.json"
 mkdir -p "$WARDEN_STATE_DIR"
 if [ ! -f "$WARDEN_STATE_FILE" ]; then
   step "Snapshotting current macOS proxy state → $WARDEN_STATE_FILE (so uninstall can restore it)"
-  python3 - "$WARDEN_STATE_FILE" "$SERVICE" <<'PY'
-import json, subprocess, sys, pathlib, re
-state_path, service = sys.argv[1], sys.argv[2]
+  # SAFETY: refuse to snapshot a state already pointing at warden — that
+  # would freeze warden's own values as the "original" so uninstall could
+  # never actually disable the proxy. (Happens on a re-install where a
+  # prior run was interrupted before writing the snapshot.)
+  python3 - "$WARDEN_STATE_FILE" "$SERVICE" "$PROXY_HOST" "$PROXY_PORT" <<'PY'
+import json, subprocess, sys, pathlib
+out, service, host, port = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 def info(cmd):
     try:
         return subprocess.check_output(cmd, text=True)
     except Exception:
         return ""
 def parse(text):
-    out = {}
+    d = {}
     for line in text.splitlines():
         if ":" in line:
             k, _, v = line.partition(":")
-            out[k.strip().lower()] = v.strip()
-    return out
+            d[k.strip().lower()] = v.strip()
+    return d
 web    = parse(info(["networksetup","-getwebproxy",       service]))
 secure = parse(info(["networksetup","-getsecurewebproxy", service]))
 bypass = info(["networksetup","-getproxybypassdomains", service]).strip().splitlines()
+if web.get("enabled") == "Yes" and secure.get("enabled") == "Yes" \
+   and web.get("server") == host and secure.get("server") == host \
+   and web.get("port") == port and secure.get("port") == port:
+    print("WARDEN_PRE_FLIP", file=sys.stderr)
+    sys.exit(2)
 state = {
   "mac_networksetup": {
     "service":    service,
@@ -275,9 +284,16 @@ state = {
     "bypass":     [b for b in bypass if b and b != "There aren't any bypass domains set on this network service."],
   }
 }
-pathlib.Path(state_path).write_text(json.dumps(state, indent=2))
+pathlib.Path(out).write_text(json.dumps(state, indent=2))
 PY
-  ok "Snapshot written"
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    ok "Snapshot written"
+  elif [ "$rc" -eq 2 ]; then
+    warn "Skipped snapshot — current networksetup already points at warden (likely a re-install). Uninstall will fall back to proxy-off."
+  else
+    warn "Snapshot script failed (rc=$rc) — uninstall will fall back to proxy-off."
+  fi
 else
   note "Existing $WARDEN_STATE_FILE — keeping the original snapshot intact."
 fi
@@ -305,13 +321,42 @@ WARDEN_RC_END="# <<< warden proxy <<<"
 # the repo. ~/.config/warden/mitmproxy-ca.pem is the canonical home.
 mkdir -p "$HOME/.config/warden"
 cp -f "$CA_FILE" "$HOME/.config/warden/mitmproxy-ca.pem"
+
+# Build a *combined* CA bundle = system roots + mitmproxy CA. SAFETY:
+#   REQUESTS_CA_BUNDLE / SSL_CERT_FILE *replace* the trust store for tools
+#   that strictly honor them (Python, pip). Pointing them at the bare
+#   mitmproxy CA breaks any HTTPS that warden's proxy *passes through*
+#   unchanged — including pypi.org — because the leaf cert chains to a
+#   public CA that isn't in the bundle. /etc/ssl/cert.pem on macOS is
+#   the system root snapshot LibreSSL/OpenSSL ship with; concat with the
+#   mitm CA so both pass-through and MITMd HTTPS verify.
+COMBINED_BUNDLE="$HOME/.config/warden/warden-ca-bundle.pem"
+SYS_BUNDLE=""
+for p in /etc/ssl/cert.pem /usr/local/etc/openssl@3/cert.pem /opt/homebrew/etc/openssl@3/cert.pem; do
+  [ -f "$p" ] && SYS_BUNDLE="$p" && break
+done
+if [ -z "$SYS_BUNDLE" ] && command -v security >/dev/null; then
+  TMP_SYS="$(mktemp)"
+  security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain >"$TMP_SYS" 2>/dev/null && \
+    [ -s "$TMP_SYS" ] && SYS_BUNDLE="$TMP_SYS"
+fi
+if [ -n "$SYS_BUNDLE" ] && [ -s "$SYS_BUNDLE" ]; then
+  cat "$SYS_BUNDLE" "$CA_FILE" > "$COMBINED_BUNDLE"
+  chmod 0644 "$COMBINED_BUNDLE"
+  ok "Combined CA bundle written to $COMBINED_BUNDLE"
+  [ "$SYS_BUNDLE" = "${TMP_SYS:-}" ] && rm -f "$TMP_SYS"
+else
+  warn "No system CA bundle found — falling back to bare mitmproxy CA. Pass-through HTTPS (e.g. pypi) may break for tools that strictly honor REQUESTS_CA_BUNDLE."
+  COMBINED_BUNDLE="$HOME/.config/warden/mitmproxy-ca.pem"
+fi
+
 WARDEN_RC_BLOCK="$WARDEN_RC_BEGIN
 export HTTP_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export HTTPS_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export ALL_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export NO_PROXY=localhost,127.0.0.1,::1
-export REQUESTS_CA_BUNDLE=$HOME/.config/warden/mitmproxy-ca.pem
-export SSL_CERT_FILE=$HOME/.config/warden/mitmproxy-ca.pem
+export REQUESTS_CA_BUNDLE=$COMBINED_BUNDLE
+export SSL_CERT_FILE=$COMBINED_BUNDLE
 $WARDEN_RC_END"
 
 for rc in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc"; do

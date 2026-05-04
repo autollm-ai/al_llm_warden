@@ -105,12 +105,16 @@ else
 fi
 
 # ── Strip the warden proxy block from shell rc files ──────────────────────
+# SAFETY: fall back to a sed-based stripper if python3 isn't present
+# (some macOS users on a clean install don't have it). Also verify the
+# strip actually fired so we don't silently leave a stale block behind.
 WARDEN_RC_BEGIN="# >>> warden proxy >>>"
 WARDEN_RC_END="# <<< warden proxy <<<"
 for rc in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc"; do
   [ -f "$rc" ] || continue
   if grep -qF "$WARDEN_RC_BEGIN" "$rc" 2>/dev/null; then
-    python3 - "$rc" "$WARDEN_RC_BEGIN" "$WARDEN_RC_END" <<'PY'
+    if command -v python3 >/dev/null; then
+      python3 - "$rc" "$WARDEN_RC_BEGIN" "$WARDEN_RC_END" <<'PY'
 import sys, pathlib, re
 rc, begin, end = sys.argv[1], sys.argv[2], sys.argv[3]
 p = pathlib.Path(rc)
@@ -120,13 +124,22 @@ new = pattern.sub("", text).rstrip() + "\n"
 if new != text:
     p.write_text(new)
 PY
-    ok "Stripped warden block from $rc"
+    else
+      sed -i.warden-bak "/^# >>> warden proxy >>>$/,/^# <<< warden proxy <<<$/d" "$rc"
+      rm -f "${rc}.warden-bak"
+    fi
+    if grep -qF "$WARDEN_RC_BEGIN" "$rc" 2>/dev/null; then
+      warn "Failed to strip warden block from $rc — please remove the lines between '$WARDEN_RC_BEGIN' and '$WARDEN_RC_END' yourself."
+    else
+      ok "Stripped warden block from $rc"
+    fi
   fi
 done
 
 # ── Unwire Claude Code if install-mac.sh wired it up ───────────────────────
 CLAUDE_SETTINGS="$HOME/.claude/settings.json"
 CA_STABLE="$HOME/.config/warden/mitmproxy-ca.pem"
+COMBINED_BUNDLE="$HOME/.config/warden/warden-ca-bundle.pem"
 if [ -f "$CLAUDE_SETTINGS" ] && command -v python3 >/dev/null; then
   step "Removing Warden env entries from $CLAUDE_SETTINGS"
   python3 - "$CLAUDE_SETTINGS" <<'PY'
@@ -154,11 +167,16 @@ PY
 fi
 
 # ── Stable CA copy cleanup ────────────────────────────────────────────────
+if [ -f "$COMBINED_BUNDLE" ]; then
+  rm -f "$COMBINED_BUNDLE"
+  ok "Removed combined CA bundle at $COMBINED_BUNDLE"
+fi
 if [ -f "$CA_STABLE" ]; then
   rm -f "$CA_STABLE"
-  rmdir "$(dirname "$CA_STABLE")" 2>/dev/null || true
   ok "Removed stable CA at $CA_STABLE"
 fi
+# Clean up the warden config dir if empty (state.json already removed).
+rmdir "$HOME/.config/warden" 2>/dev/null || true
 
 # ── Optional file cleanup ─────────────────────────────────────────────────
 if [ -f "$CA_FILE" ]; then
@@ -217,12 +235,24 @@ if [ "${#running_browsers[@]}" -gt 0 ]; then
   fi
 fi
 
+# Stripping the rc block only affects *new* shells. Already-open terminals
+# still have HTTP_PROXY / SSL_CERT_FILE etc. exported pointing at files
+# we just deleted — that breaks pip and friends until cleared. Print a
+# copy-pasteable one-liner.
 cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   System proxy disabled, CA removed (system + stable copy), terminal
   env vars stripped, Claude Code settings cleaned, browsers closed.
   The Docker stack is still running (run 'docker compose down' to stop).
+
+  ⚠  Already-open terminals still have warden's env vars set. To clean
+     the *current* shell (run this in each open terminal, or just open
+     a new one):
+
+      unset HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \\
+            REQUESTS_CA_BUNDLE SSL_CERT_FILE \\
+            http_proxy https_proxy all_proxy no_proxy
 
   To start fresh:  bash scripts/install-mac.sh
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
