@@ -31,9 +31,9 @@ print_logo() {
 print_logo
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-  C1='\033[1;35m'; OK='\033[32m✔\033[0m'; WARN='\033[33m!\033[0m'; END='\033[0m'
+  C1='\033[1;35m'; OK='\033[32m✔\033[0m'; WARN='\033[33m!\033[0m'; DIM='\033[2m'; END='\033[0m'
 else
-  C1=''; OK='[ok]'; WARN='[warn]'; END=''
+  C1=''; OK='[ok]'; WARN='[warn]'; DIM=''; END=''
 fi
 step() { printf "${C1}▶${END} %s\n" "$*"; }
 ok()   { printf "  %b %s\n" "$OK"   "$*"; }
@@ -247,22 +247,56 @@ if [ -e "$CA_FILE" ]; then
   ok "Removed $CA_FILE"
 fi
 
-# ── 6. Force-quit browsers so they re-read trust on next launch ────────────
-# SAFETY: match by exact binary name (not -f against full cmdline) so we
-# can't accidentally kill `chromedriver`, `chrome-pdf-helper`, or any other
-# tool that happens to contain "chrome" in its argv.
+# ── 6. Quit browsers so they re-read trust on next launch ─────────────────
+# SAFETY:
+#   • Match by exact binary name (not -f against full cmdline) so we can't
+#     accidentally kill `chromedriver`, `chrome-pdf-helper`, etc.
+#   • Linux browsers DON'T prompt before SIGTERM. Always ask the user
+#     first, listing exactly which processes will die, so they can save
+#     unsaved work.
+#   • Skippable in non-interactive runs via WARDEN_QUIT_BROWSERS=0.
 BROWSER_BINS="chrome chromium chromium-browser google-chrome google-chrome-stable firefox firefox-bin firefox-esr"
-killed_any=0
+running_browser_bins=""
 for proc in $BROWSER_BINS; do
   if pgrep -u "$TARGET_USER" -x "$proc" >/dev/null 2>&1; then
-    run_as_user pkill -x "$proc" >/dev/null 2>&1 || true
-    killed_any=1
+    running_browser_bins="$running_browser_bins $proc"
   fi
 done
-if [ "$killed_any" -eq 1 ]; then
-  step "Closing Chrome / Chromium / Firefox so they re-read NSS trust on next launch"
-  sleep 1
-  ok "Browsers closed"
+
+if [ -n "$running_browser_bins" ]; then
+  case "${WARDEN_QUIT_BROWSERS:-}" in
+    1|y|yes|true)  do_quit=1 ;;
+    0|n|no|false)  do_quit=0 ;;
+    *)
+      if [ -t 0 ]; then
+        printf "\n${C1}▶${END} The following browser processes are running and need to\n"
+        printf "  restart to drop the warden CA trust:\n"
+        for proc in $running_browser_bins; do
+          printf "    • %s\n" "$proc"
+        done
+        printf "  ${DIM}This sends SIGTERM. Session restore recovers tabs, but\n"
+        printf "  unsubmitted forms / unsaved drafts will be lost — please save\n"
+        printf "  anything important first.${END}\n"
+        printf "  Quit them now? [y/N] "
+        read -r ans </dev/tty || ans=""
+        case "$ans" in y|Y|yes|YES) do_quit=1 ;; *) do_quit=0 ;; esac
+      else
+        do_quit=0
+        warn "Non-interactive run — leaving browsers alone. Restart them yourself, or re-run with WARDEN_QUIT_BROWSERS=1."
+      fi
+      ;;
+  esac
+
+  if [ "$do_quit" = "1" ]; then
+    step "Closing Chrome / Chromium / Firefox so they drop the old CA trust"
+    for proc in $running_browser_bins; do
+      run_as_user pkill -x "$proc" >/dev/null 2>&1 || true
+    done
+    sleep 1
+    ok "Browsers closed"
+  else
+    warn "Skipping browser quit. Restart your browsers manually so they drop the old CA trust."
+  fi
 fi
 
 cat <<EOF

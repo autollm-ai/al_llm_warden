@@ -55,11 +55,49 @@ note()  { printf "  ${DIM}%s${END}\n" "$*"; }
 [ "$(uname -s)" = "Darwin" ] || fail "This installer is for macOS. On Linux, run scripts/install-linux.sh."
 command -v networksetup >/dev/null || fail "networksetup not found — are you on macOS?"
 
-# ── Docker: auto-install if missing ────────────────────────────────────────
-# We install Colima (lightweight Linux-VM Docker runtime) + the Docker CLI
-# via Homebrew. Docker Desktop has a license-acceptance UI that we can't
-# automate, so Colima is the right default for a one-shot installer. The
-# user can swap in Docker Desktop later if they prefer.
+# ── Docker: auto-install + auto-start if missing ───────────────────────────
+# Strategy:
+#   1. If `docker` CLI is missing → install Colima via Homebrew (Desktop has
+#      a license-acceptance click we can't automate).
+#   2. If `docker info` already works → done.
+#   3. Else try, in order, every runtime that's actually installed —
+#        a. Docker Desktop (open the .app)
+#        b. Colima (`colima start`)
+#      then poll for `docker info` for up to 90s.
+#   4. If neither is installed, fall through to step 1 (install Colima).
+wait_for_daemon() {
+  local tries=0
+  until docker info >/dev/null 2>&1; do
+    tries=$((tries + 1))
+    if [ "$tries" -ge 45 ]; then
+      return 1
+    fi
+    if [ "$((tries % 5))" = "0" ]; then
+      note "still waiting for Docker daemon… ($((tries * 2))s)"
+    fi
+    sleep 2
+  done
+  return 0
+}
+
+start_docker_desktop() {
+  if [ -d "/Applications/Docker.app" ] || [ -d "$HOME/Applications/Docker.app" ]; then
+    step "Starting Docker Desktop"
+    open -ga Docker || return 1
+    return 0
+  fi
+  return 1
+}
+
+start_colima() {
+  if command -v colima >/dev/null; then
+    step "Starting Colima (spins up a small Linux VM — first start can take ~1 min)"
+    colima start || return 1
+    return 0
+  fi
+  return 1
+}
+
 install_docker() {
   step "Docker not found on host — installing Colima + Docker CLI via Homebrew"
   if ! command -v brew >/dev/null; then
@@ -67,26 +105,95 @@ install_docker() {
        Alternatively, install Docker Desktop from https://www.docker.com/products/docker-desktop/ and re-run."
   fi
   brew install colima docker docker-compose
-  step "Starting Colima (this spins up a small Linux VM — first start can take ~1 min)"
-  if ! colima status >/dev/null 2>&1; then
-    colima start || fail "colima failed to start. Try 'colima start --verbose' to see why."
-  fi
+  start_colima || fail "colima failed to start. Try 'colima start --verbose' to see why."
   command -v docker >/dev/null || fail "Docker install reported success but 'docker' is still missing."
   ok "Docker installed (Colima backend)"
 }
 
 if ! command -v docker >/dev/null; then
   install_docker
-elif ! docker info >/dev/null 2>&1; then
-  # Docker CLI is present but the daemon isn't reachable. On mac that usually
-  # means Docker Desktop / Colima isn't started — try to nudge Colima awake
-  # since that's the runtime we'd install ourselves.
-  if command -v colima >/dev/null; then
-    step "Docker daemon not reachable — starting Colima"
-    colima start || fail "colima failed to start. Open Docker Desktop manually, or run 'colima start --verbose'."
-  else
-    fail "Docker daemon not reachable. Start Docker Desktop, then re-run this installer."
+fi
+
+if ! docker info >/dev/null 2>&1; then
+  # CLI present but daemon down. Try to start whichever runtime is installed.
+  started=0
+  if start_docker_desktop; then started=1
+  elif start_colima;        then started=1
   fi
+  if [ "$started" = "0" ]; then
+    # Nothing installed that we can start — install Colima ourselves.
+    install_docker
+  fi
+  step "Waiting for Docker daemon to come up"
+  if ! wait_for_daemon; then
+    fail "Docker daemon didn't come up within 90s. Open Docker Desktop manually (or run 'colima start --verbose'), then re-run this installer."
+  fi
+  ok "Docker daemon ready"
+fi
+
+# ── Bring up the warden stack if not already running ───────────────────────
+# Without this, the script proceeds to wait for warden-proxy's CA file and
+# times out — the containers were never started.
+#
+# Two gotchas we've hit on macOS:
+#   1. If a previous Warden install set HTTP_PROXY=http://127.0.0.1:8080
+#      in the shell, those env vars leak into `docker compose` and confuse
+#      BuildKit / Docker Desktop's network. Strip them for the duration.
+#      127.0.0.1 means "the proxy" from the host's view but means nothing
+#      from inside the build VM, so registry pulls fail with weird DNS /
+#      "no HTTPS proxy" errors.
+#   2. Docker Desktop reports "ready" before its VM's DNS is fully wired.
+#      Fresh-start pulls then fail with `lookup registry-1.docker.io: no
+#      such host`. Retry once after a short wait.
+docker_proxyless() {
+  env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+      -u http_proxy -u https_proxy -u all_proxy \
+      docker "$@"
+}
+docker_compose_proxyless() {
+  if docker compose version >/dev/null 2>&1; then
+    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+        -u http_proxy -u https_proxy -u all_proxy \
+        docker compose "$@"
+  elif command -v docker-compose >/dev/null; then
+    env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+        -u http_proxy -u https_proxy -u all_proxy \
+        docker-compose "$@"
+  else
+    return 127
+  fi
+}
+
+if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'warden-proxy'; then
+  COMPOSE_FILE="$(cd "$(dirname "$0")/.." && pwd)/docker-compose.yml"
+  if [ ! -f "$COMPOSE_FILE" ]; then
+    fail "docker-compose.yml not found at $COMPOSE_FILE — run this script from the repo."
+  fi
+
+  # Pre-pull the base image so DNS / registry issues surface before the
+  # build does, with a clearer error than a 30-line BuildKit dump.
+  step "Pulling python:3.11-slim base image (lets BuildKit reuse it)"
+  if ! docker_proxyless pull python:3.11-slim >/dev/null 2>&1; then
+    note "First pull failed — waiting 10s for Docker's network and retrying once"
+    sleep 10
+    if ! docker_proxyless pull python:3.11-slim; then
+      fail "Couldn't pull python:3.11-slim from Docker Hub.
+       Likely cause: Docker Desktop's VM has no DNS yet, or a prior HTTP_PROXY
+       env var leaked into Docker. Try:
+         • Quit Docker Desktop, reopen it, wait until the whale is steady, re-run.
+         • Or: open new shell (so HTTP_PROXY isn't set) and re-run."
+    fi
+  fi
+  ok "Base image present"
+
+  step "Starting warden-proxy + warden-api (docker compose up -d --build)"
+  if ! docker_compose_proxyless -f "$COMPOSE_FILE" up -d --build; then
+    note "First compose run failed — waiting 10s and retrying once"
+    sleep 10
+    docker_compose_proxyless -f "$COMPOSE_FILE" up -d --build \
+      || fail "'docker compose up -d' failed. Run it manually with -f $COMPOSE_FILE to see full output."
+  fi
+  ok "Containers launched"
 fi
 
 # ── 1. Detect the active network service ───────────────────────────────────
@@ -301,24 +408,56 @@ if [ "$DO_CLAUDE" = "1" ]; then
   configure_claude_code
 fi
 
-# ── 8. Force-quit browsers so they re-read trust on next launch ────────────
+# ── 8. Quit browsers so they re-read trust on next launch ──────────────────
 # Newly-trusted CAs in the System keychain are picked up by Safari/Chrome
-# only on next launch. SAFETY: we ask the apps to quit via Apple Events
-# (osascript) instead of pkill -f. AppleScript "tell app to quit" only
-# targets the actual GUI app — it can't accidentally match a CLI process
-# that happens to contain "chrome" in its argv. Apps prompt the user
-# themselves if there are unsaved tabs/forms, so no work is silently lost.
+# only on next launch. SAFETY:
+#   • Apple Events (osascript) target the actual GUI app — they can never
+#     match a CLI tool that has "chrome" in its argv (unlike pkill -f).
+#   • The macOS apps themselves prompt about unsaved tabs/forms, but a
+#     user with 50 tabs open doesn't want a sudden quit dialog mid-flow.
+#     So WE prompt FIRST, listing which browsers are running, and only
+#     send the quit if the user confirms.
+#   • Skippable in non-interactive runs via WARDEN_QUIT_BROWSERS=0.
 BROWSER_APPS=("Google Chrome" "Chromium" "Firefox" "Arc" "Brave Browser" "Safari" "Microsoft Edge")
-quit_attempted=0
+running_browsers=()
 for app in "${BROWSER_APPS[@]}"; do
   if osascript -e "tell application \"System Events\" to (name of processes) contains \"$app\"" 2>/dev/null | grep -qi true; then
-    step "Asking $app to quit (it'll prompt you about unsaved work if any)"
-    osascript -e "tell application \"$app\" to quit" >/dev/null 2>&1 || true
-    quit_attempted=1
+    running_browsers+=("$app")
   fi
 done
-if [ "$quit_attempted" -eq 1 ]; then
-  ok "Browsers asked to quit — reopen them to pick up the new trust"
+
+if [ "${#running_browsers[@]}" -gt 0 ]; then
+  case "${WARDEN_QUIT_BROWSERS:-}" in
+    1|y|yes|true)  do_quit=1 ;;
+    0|n|no|false)  do_quit=0 ;;
+    *)
+      if [ -t 0 ]; then
+        printf "\n${C1}▶${END} The following browsers are running and need to restart\n"
+        printf "  to pick up the new CA trust:\n"
+        for app in "${running_browsers[@]}"; do
+          printf "    • %s\n" "$app"
+        done
+        printf "  ${DIM}Each app will prompt about unsaved work, but please save\n"
+        printf "  anything important first.${END}\n"
+        printf "  Quit them now? [y/N] "
+        read -r ans || ans=""
+        case "$ans" in y|Y|yes|YES) do_quit=1 ;; *) do_quit=0 ;; esac
+      else
+        do_quit=0
+        note "Non-interactive run — leaving browsers alone. Restart them yourself, or re-run with WARDEN_QUIT_BROWSERS=1."
+      fi
+      ;;
+  esac
+
+  if [ "$do_quit" = "1" ]; then
+    for app in "${running_browsers[@]}"; do
+      step "Asking $app to quit"
+      osascript -e "tell application \"$app\" to quit" >/dev/null 2>&1 || true
+    done
+    ok "Browsers asked to quit — reopen them to pick up the new trust"
+  else
+    warn "Skipping browser quit. Restart your browsers manually so they re-read the new CA trust."
+  fi
 fi
 
 cat <<EOF

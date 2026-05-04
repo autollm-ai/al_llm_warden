@@ -606,34 +606,72 @@ else
   ok "Re-added; re-verify with 'certutil -d sql:\$HOME/.pki/nssdb -L -n $CA_NICKNAME'"
 fi
 
-# ── 9. Force-quit browsers so they re-read NSS trust on next launch ────────
-# SAFETY: match by *exact* binary name with `pgrep -x`, not `-f` against the
-# full cmdline. The old `-f 'chrome'` regex would also kill chromedriver,
-# chrome-pdf-helper, mychrome-tool, anything with "chrome" in its argv.
+# ── 9. Quit browsers so they re-read NSS trust on next launch ──────────────
+# SAFETY:
+#   • Match by *exact* binary name with `pgrep -x`, not `-f` against the
+#     full cmdline. The old `-f 'chrome'` regex would also kill chromedriver,
+#     chrome-pdf-helper, mychrome-tool, anything with "chrome" in its argv.
+#   • Linux browsers DON'T prompt before SIGTERM — SIGKILL after 1s is
+#     hard. So we ALWAYS prompt the user first (listing exactly which
+#     processes will die) and only proceed on confirmation. Most session
+#     restore features handle a clean SIGTERM, but typed-but-unsubmitted
+#     forms / unsaved drafts will be lost.
+#   • Skippable in non-interactive runs via WARDEN_QUIT_BROWSERS=0.
 BROWSER_BINS="chrome chromium chromium-browser google-chrome google-chrome-stable firefox firefox-bin firefox-esr"
-browsers_alive() {
-  for proc in $BROWSER_BINS; do
-    pgrep -u "$TARGET_USER" -x "$proc" >/dev/null 2>&1 && return 0
-  done
-  return 1
-}
-if browsers_alive; then
-  step "Closing Chrome / Chromium / Firefox so they re-read NSS trust on next launch"
-  for proc in $BROWSER_BINS; do
-    run_as_user pkill -x "$proc" >/dev/null 2>&1 || true
-  done
-  sleep 1
-  for proc in $BROWSER_BINS; do
-    run_as_user pkill -9 -x "$proc" >/dev/null 2>&1 || true
-  done
-  for _ in 1 2 3 4 5; do
-    browsers_alive || break
+running_browser_bins=""
+for proc in $BROWSER_BINS; do
+  if pgrep -u "$TARGET_USER" -x "$proc" >/dev/null 2>&1; then
+    running_browser_bins="$running_browser_bins $proc"
+  fi
+done
+
+if [ -n "$running_browser_bins" ]; then
+  case "${WARDEN_QUIT_BROWSERS:-}" in
+    1|y|yes|true)  do_quit=1 ;;
+    0|n|no|false)  do_quit=0 ;;
+    *)
+      if [ -t 0 ]; then
+        printf "\n${C1}▶${END} The following browser processes are running and need to\n"
+        printf "  restart to pick up the new CA trust:\n"
+        for proc in $running_browser_bins; do
+          printf "    • %s\n" "$proc"
+        done
+        printf "  ${DIM}This sends SIGTERM (then SIGKILL after 1s). Session restore\n"
+        printf "  recovers tabs, but unsubmitted forms / unsaved drafts will be\n"
+        printf "  lost — please save anything important first.${END}\n"
+        printf "  Quit them now? [y/N] "
+        read -r ans </dev/tty || ans=""
+        case "$ans" in y|Y|yes|YES) do_quit=1 ;; *) do_quit=0 ;; esac
+      else
+        do_quit=0
+        note "Non-interactive run — leaving browsers alone. Restart them yourself, or re-run with WARDEN_QUIT_BROWSERS=1."
+      fi
+      ;;
+  esac
+
+  if [ "$do_quit" = "1" ]; then
+    step "Closing Chrome / Chromium / Firefox so they re-read NSS trust on next launch"
+    for proc in $running_browser_bins; do
+      run_as_user pkill -x "$proc" >/dev/null 2>&1 || true
+    done
     sleep 1
-  done
-  if browsers_alive; then
-    warn "Some browser processes are still alive after SIGKILL — close any remaining windows manually before reopening."
+    for proc in $running_browser_bins; do
+      run_as_user pkill -9 -x "$proc" >/dev/null 2>&1 || true
+    done
+    sleep 1
+    still_alive=""
+    for proc in $running_browser_bins; do
+      if pgrep -u "$TARGET_USER" -x "$proc" >/dev/null 2>&1; then
+        still_alive="$still_alive $proc"
+      fi
+    done
+    if [ -n "$still_alive" ]; then
+      warn "Some browser processes are still alive after SIGKILL ($still_alive) — close any remaining windows manually before reopening."
+    else
+      ok "Browsers closed — reopen them to pick up the new trust"
+    fi
   else
-    ok "Browsers closed — reopen them to pick up the new trust"
+    warn "Skipping browser quit. Restart your browsers manually so they re-read the new CA trust."
   fi
 fi
 

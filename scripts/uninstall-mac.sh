@@ -29,9 +29,9 @@ print_logo() {
 print_logo
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
-  C1='\033[1;35m'; OK='\033[32m✔\033[0m'; WARN='\033[33m!\033[0m'; END='\033[0m'
+  C1='\033[1;35m'; OK='\033[32m✔\033[0m'; WARN='\033[33m!\033[0m'; DIM='\033[2m'; END='\033[0m'
 else
-  C1=''; OK='[ok]'; WARN='[warn]'; END=''
+  C1=''; OK='[ok]'; WARN='[warn]'; DIM=''; END=''
 fi
 step() { printf "${C1}▶${END} %s\n" "$*"; }
 ok()   { printf "  %b %s\n" "$OK"   "$*"; }
@@ -167,22 +167,54 @@ if [ -f "$CA_FILE" ]; then
   ok "Removed $CA_FILE"
 fi
 
-# ── Force-quit browsers so they re-read trust on next launch ──────────────
-# SAFETY: ask the actual GUI apps to quit via Apple Events instead of
-# pkill -f. Apple Events target real apps only — they can never match an
-# unrelated CLI tool that happens to contain "chrome" in its argv. The
-# apps prompt for unsaved-tab confirmation themselves.
+# ── Quit browsers so they re-read trust on next launch ────────────────────
+# SAFETY:
+#   • Apple Events (osascript) target the real GUI apps only — they can
+#     never match a CLI tool that has "chrome" in its argv (unlike pkill -f).
+#   • The macOS apps themselves prompt about unsaved tabs/forms, but we
+#     ALSO prompt FIRST so the user can save important work before any
+#     quit dialog appears.
+#   • Skippable in non-interactive runs via WARDEN_QUIT_BROWSERS=0.
 BROWSER_APPS=("Google Chrome" "Chromium" "Firefox" "Arc" "Brave Browser" "Safari" "Microsoft Edge")
-quit_attempted=0
+running_browsers=()
 for app in "${BROWSER_APPS[@]}"; do
   if osascript -e "tell application \"System Events\" to (name of processes) contains \"$app\"" 2>/dev/null | grep -qi true; then
-    osascript -e "tell application \"$app\" to quit" >/dev/null 2>&1 || true
-    quit_attempted=1
+    running_browsers+=("$app")
   fi
 done
-if [ "$quit_attempted" -eq 1 ]; then
-  step "Asked browsers to quit (will prompt about unsaved work if any)"
-  ok "Browsers closing — reopen them to pick up the trust change"
+
+if [ "${#running_browsers[@]}" -gt 0 ]; then
+  case "${WARDEN_QUIT_BROWSERS:-}" in
+    1|y|yes|true)  do_quit=1 ;;
+    0|n|no|false)  do_quit=0 ;;
+    *)
+      if [ -t 0 ]; then
+        printf "\n${C1}▶${END} The following browsers are running and need to restart\n"
+        printf "  to drop the warden CA trust:\n"
+        for app in "${running_browsers[@]}"; do
+          printf "    • %s\n" "$app"
+        done
+        printf "  ${DIM}Each app will prompt about unsaved work, but please save\n"
+        printf "  anything important first.${END}\n"
+        printf "  Quit them now? [y/N] "
+        read -r ans || ans=""
+        case "$ans" in y|Y|yes|YES) do_quit=1 ;; *) do_quit=0 ;; esac
+      else
+        do_quit=0
+        warn "Non-interactive run — leaving browsers alone. Restart them yourself, or re-run with WARDEN_QUIT_BROWSERS=1."
+      fi
+      ;;
+  esac
+
+  if [ "$do_quit" = "1" ]; then
+    for app in "${running_browsers[@]}"; do
+      step "Asking $app to quit"
+      osascript -e "tell application \"$app\" to quit" >/dev/null 2>&1 || true
+    done
+    ok "Browsers closing — reopen them to pick up the trust change"
+  else
+    warn "Skipping browser quit. Restart your browsers manually so they drop the old CA trust."
+  fi
 fi
 
 cat <<EOF

@@ -219,9 +219,10 @@ def _make_stream_tap(flow: "http.HTTPFlow"):
 # usage stats, or stop reasons.
 def _parse_sse_text(body_bytes: bytes) -> str:
     """Best-effort extractor that handles Anthropic / OpenAI / Gemini SSE
-    shapes in one pass. Unknown shapes fall back to dropping the data line
-    entirely — better to under-extract than to feed control metadata into
-    the LSTM.
+    shapes in one pass. Pulls assistant text AND tool-call payloads — Claude
+    Code conversations are dominated by tool_use blocks (Bash/Edit/Read), so
+    a parser that only looked at text_delta returned "" for ~every flow and
+    the response event never got written.
     """
     try:
         body = body_bytes.decode("utf-8", errors="replace")
@@ -238,27 +239,79 @@ def _parse_sse_text(body_bytes: bytes) -> str:
             obj = json.loads(payload)
         except Exception:
             continue
+        if not isinstance(obj, dict):
+            continue
+        otype = obj.get("type")
         # ── Anthropic /v1/messages ──
-        # event: content_block_delta -> {"type":"content_block_delta",
-        #   "index":0,"delta":{"type":"text_delta","text":"Hello"}}
-        if isinstance(obj, dict) and obj.get("type") == "content_block_delta":
+        # text_delta:        {"delta":{"type":"text_delta","text":"…"}}
+        # input_json_delta:  {"delta":{"type":"input_json_delta","partial_json":"…"}}  ← tool args
+        # thinking_delta:    {"delta":{"type":"thinking_delta","thinking":"…"}}
+        # content_block_start with tool_use: {"content_block":{"type":"tool_use","name":"Bash","input":{}}}
+        if otype == "content_block_delta":
             delta = obj.get("delta") or {}
-            if isinstance(delta, dict) and isinstance(delta.get("text"), str):
-                pieces.append(delta["text"])
-                continue
+            if isinstance(delta, dict):
+                for key in ("text", "partial_json", "thinking"):
+                    v = delta.get(key)
+                    if isinstance(v, str) and v:
+                        pieces.append(v)
+            continue
+        if otype == "content_block_start":
+            cb = obj.get("content_block") or {}
+            if isinstance(cb, dict):
+                name = cb.get("name")
+                if isinstance(name, str) and name:
+                    pieces.append(f"tool:{name}")
+                inp = cb.get("input")
+                if isinstance(inp, (dict, list)):
+                    try:
+                        pieces.append(json.dumps(inp, ensure_ascii=False))
+                    except Exception:
+                        pass
+                txt = cb.get("text")
+                if isinstance(txt, str) and txt:
+                    pieces.append(txt)
+            continue
+        # ── OpenAI Responses API streaming ──
+        # response.output_text.delta:  {"type":"response.output_text.delta","delta":"…"}
+        # response.function_call_arguments.delta: {"type":"…","delta":"…"}  ← tool args
+        if isinstance(otype, str) and otype.startswith("response."):
+            d = obj.get("delta")
+            if isinstance(d, str) and d:
+                pieces.append(d)
+            elif isinstance(d, dict):
+                for key in ("text", "value", "arguments"):
+                    v = d.get(key)
+                    if isinstance(v, str) and v:
+                        pieces.append(v)
+            continue
         # ── OpenAI /v1/chat/completions ──
-        # data: {"choices":[{"delta":{"content":"Hello"}}]}
-        if isinstance(obj, dict) and isinstance(obj.get("choices"), list):
+        # data: {"choices":[{"delta":{"content":"…","tool_calls":[{"function":{"arguments":"…"}}]}}]}
+        if isinstance(obj.get("choices"), list):
             for ch in obj["choices"]:
                 if not isinstance(ch, dict):
                     continue
                 d = ch.get("delta") or ch.get("message") or {}
-                if isinstance(d, dict) and isinstance(d.get("content"), str):
+                if not isinstance(d, dict):
+                    continue
+                if isinstance(d.get("content"), str) and d["content"]:
                     pieces.append(d["content"])
+                if isinstance(d.get("reasoning"), str) and d["reasoning"]:
+                    pieces.append(d["reasoning"])
+                tcs = d.get("tool_calls")
+                if isinstance(tcs, list):
+                    for tc in tcs:
+                        if not isinstance(tc, dict):
+                            continue
+                        fn = tc.get("function") or {}
+                        if isinstance(fn, dict):
+                            for key in ("name", "arguments"):
+                                v = fn.get(key)
+                                if isinstance(v, str) and v:
+                                    pieces.append(v)
             continue
         # ── Gemini streamGenerateContent ──
         # data: {"candidates":[{"content":{"parts":[{"text":"Hello"}]}}]}
-        if isinstance(obj, dict) and isinstance(obj.get("candidates"), list):
+        if isinstance(obj.get("candidates"), list):
             for cand in obj["candidates"]:
                 if not isinstance(cand, dict):
                     continue
@@ -266,10 +319,41 @@ def _parse_sse_text(body_bytes: bytes) -> str:
                 if not isinstance(content, dict):
                     continue
                 for part in content.get("parts", []) or []:
-                    if isinstance(part, dict) and isinstance(part.get("text"), str):
-                        pieces.append(part["text"])
+                    if isinstance(part, dict):
+                        t = part.get("text")
+                        if isinstance(t, str) and t:
+                            pieces.append(t)
+                        fc = part.get("functionCall")
+                        if isinstance(fc, dict):
+                            try:
+                                pieces.append(json.dumps(fc, ensure_ascii=False))
+                            except Exception:
+                                pass
             continue
     return "".join(pieces)
+
+
+def _sse_raw_text_fallback(body_bytes: bytes) -> str:
+    """Last-resort SSE flattener used when _parse_sse_text comes up empty.
+
+    Concatenates every `data:` payload (excluding `[DONE]`) verbatim. We
+    still want a row in the DB so the operator can see the streaming flow
+    happened, even if no provider-specific shape matched. The metadata
+    scrubber downstream strips IDs/timestamps before tier-2 sees this.
+    """
+    try:
+        body = body_bytes.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+    out: list[str] = []
+    for line in body.splitlines():
+        if not line.startswith("data:"):
+            continue
+        payload = line[5:].strip()
+        if not payload or payload == "[DONE]":
+            continue
+        out.append(payload)
+    return "\n".join(out)
 
 
 # ── test-mode capture ────────────────────────────────────────────────
@@ -459,6 +543,40 @@ class Warden:
         is_sse = flow.metadata.get("warden_is_sse")
         stream_buf = flow.metadata.get("warden_stream_buf")
 
+        def _write_skipped(reason: str, body_len: int) -> None:
+            """Insert a placeholder response row when we decided to skip
+            tier-2 classification. Without this, streaming flows whose
+            extraction came up empty (or whose body was below the
+            min-length floor) left zero trace on the dashboard — the
+            operator couldn't tell if the proxy saw the response at all
+            or if monitoring was broken. Now there's always a row."""
+            try:
+                ev = Event(
+                    ts=now_iso(),
+                    host=host,
+                    provider=provider,
+                    method=flow.request.method,
+                    path=flow.request.path,
+                    sensitivity=0.0,
+                    tier1_score=0.0,
+                    tier2_score=0.0,
+                    label="clean",
+                    categories=[],
+                    hits=[],
+                    summary=f"response not scored: {reason}",
+                    bytes_out=body_len,
+                    sample="",
+                    intent=req_intent or "unknown",
+                    intent_conf=0.0,
+                    effective_sensitivity=0.0,
+                    direction="response",
+                )
+                self.store.insert(ev)
+            except Exception as e:
+                log.warning("Skipped-response insert failed: %s", e)
+            flow.response.headers["x-warden-response-scanned"] = "0"
+            flow.response.headers["x-warden-response-skip-reason"] = reason
+
         # Pick the body source. Streamed responses populate the side
         # buffer set by the tap in responseheaders(); buffered responses
         # use mitmproxy's auto-decompressed content.
@@ -472,9 +590,14 @@ class Warden:
             if is_sse:
                 text = _parse_sse_text(body_bytes)
                 if not text.strip():
-                    flow.response.headers["x-warden-response-scanned"] = "0"
-                    flow.response.headers["x-warden-response-skip-reason"] = "sse-empty-extract"
-                    return
+                    # Provider-shaped extractor came up empty (e.g. a Claude
+                    # Code turn that's pure tool_use deltas the parser
+                    # didn't recognise, or a brand-new event shape). Fall
+                    # back to a raw flatten of every `data:` line so the
+                    # row STILL gets written — operators need to see the
+                    # streaming flow even if extraction was lossy.
+                    text = _sse_raw_text_fallback(body_bytes)
+                    flow.response.headers["x-warden-response-extract"] = "raw-fallback"
                 # Skip the strict-ctype gate (we already KNOW this is SSE)
                 # and the JSON-flatten step (we just extracted text), but
                 # still run the metadata scrubber + min-length floor.
@@ -484,12 +607,11 @@ class Warden:
                 # normal response. Often this is a long JSON body that
                 # was streamed for size reasons.
                 if not _is_scorable_response_ctype(ctype):
-                    flow.response.headers["x-warden-response-scanned"] = "0"
-                    flow.response.headers["x-warden-response-skip-reason"] = "non-model-ctype"
+                    _write_skipped("non-model-ctype", len(body_bytes))
                     return
                 text = _decode_for_scoring(body_bytes, ctype)
                 if not text.strip():
-                    flow.response.headers["x-warden-response-scanned"] = "0"
+                    _write_skipped("decode-empty", len(body_bytes))
                     return
                 text = _flatten_payload(text, ctype)
         else:
@@ -502,25 +624,23 @@ class Warden:
             if not body_bytes:
                 return
             if not _is_scorable_response_ctype(ctype):
-                flow.response.headers["x-warden-response-scanned"] = "0"
-                flow.response.headers["x-warden-response-skip-reason"] = "non-model-ctype"
+                _write_skipped("non-model-ctype", len(body_bytes))
                 return
             text = _decode_for_scoring(body_bytes, ctype)
             if not text.strip():
-                flow.response.headers["x-warden-response-scanned"] = "0"
+                _write_skipped("decode-empty", len(body_bytes))
                 return
             text = _flatten_payload(text, ctype)
 
         if not text.strip():
-            flow.response.headers["x-warden-response-scanned"] = "0"
+            _write_skipped("scrub-empty", len(body_bytes))
             return
         # Tier-2 needs context. Tiny bodies (version strings, "ok", single
         # UUIDs, heartbeat tokens) carry no real signal and the LSTM
         # over-fires on them. Skip below the floor — tier-1 still ran on
         # the request, so secrets aren't missed.
         if len(text.strip()) < _MIN_RESPONSE_SCORE_LEN:
-            flow.response.headers["x-warden-response-scanned"] = "0"
-            flow.response.headers["x-warden-response-skip-reason"] = "too-short"
+            _write_skipped("too-short", len(body_bytes))
             return
 
         result = self.classifier.classify(
