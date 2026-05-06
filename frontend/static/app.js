@@ -514,8 +514,92 @@ function escapeHtml(s) {
 }
 function escapeAttr(s) { return escapeHtml(s); }
 
+// ── BROWSER ALERTS FOR CRITICAL RESPONSE EVENTS ─────────────────────────────
+// Fires a Notification when a new event with direction=response and
+// label=critical lands. Triggers regardless of the dashboard's filter
+// settings — the user might be browsing requests when a destructive
+// command surfaces in a model response.
+const ALERT_STORAGE_KEY = "warden:alerts:enabled";
+const ALERT_LAST_ID_KEY = "warden:alerts:lastId";
+let alertsEnabled = localStorage.getItem(ALERT_STORAGE_KEY) === "1";
+let alertsLastSeenId = parseInt(localStorage.getItem(ALERT_LAST_ID_KEY) || "0", 10) || 0;
+let alertsPrimed = false; // skip notifications on the first poll after page load
+
+function renderAlertsButton() {
+  const btn = $("#alerts-btn");
+  if (!btn) return;
+  if (typeof Notification === "undefined") {
+    btn.textContent = "Alerts unsupported";
+    btn.disabled = true;
+    return;
+  }
+  if (alertsEnabled && Notification.permission === "granted") {
+    btn.textContent = "🔔 Alerts on";
+    btn.classList.add("btn-primary");
+    btn.classList.remove("btn-secondary");
+  } else {
+    btn.textContent = "Enable alerts";
+    btn.classList.add("btn-secondary");
+    btn.classList.remove("btn-primary");
+  }
+}
+
+async function toggleAlerts() {
+  if (typeof Notification === "undefined") return;
+  if (alertsEnabled) {
+    alertsEnabled = false;
+    localStorage.setItem(ALERT_STORAGE_KEY, "0");
+    renderAlertsButton();
+    return;
+  }
+  let perm = Notification.permission;
+  if (perm === "default") perm = await Notification.requestPermission();
+  if (perm !== "granted") {
+    alert("Notifications were blocked. Re-enable them in your browser's site settings to use this.");
+    return;
+  }
+  alertsEnabled = true;
+  alertsPrimed = false; // baseline next poll so old events don't fire on toggle-on
+  localStorage.setItem(ALERT_STORAGE_KEY, "1");
+  renderAlertsButton();
+}
+
+async function pollCriticalResponses() {
+  if (!alertsEnabled || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  let data;
+  try { data = await api(`/api/events?limit=20&direction=response`); } catch { return; }
+  const rows = data.events || [];
+  if (!rows.length) return;
+  const newest = rows[0].id;
+  if (!alertsPrimed) {
+    // Don't notify on whatever was already in the DB when the dashboard opened.
+    alertsLastSeenId = Math.max(alertsLastSeenId, newest);
+    localStorage.setItem(ALERT_LAST_ID_KEY, String(alertsLastSeenId));
+    alertsPrimed = true;
+    return;
+  }
+  const fresh = rows
+    .filter(r => r.id > alertsLastSeenId && r.label === "critical")
+    .reverse(); // oldest first so the most recent ends up on top of the OS stack
+  for (const r of fresh) {
+    try {
+      const n = new Notification(`⚠ Destructive command in ${r.provider} response`, {
+        body: r.summary || `${r.method} ${r.path}`,
+        tag: `warden-${r.id}`,
+        requireInteraction: false,
+      });
+      n.onclick = () => { window.focus(); openDetail(r.id); n.close(); };
+    } catch (e) { /* notification API errors are non-fatal */ }
+  }
+  alertsLastSeenId = newest;
+  localStorage.setItem(ALERT_LAST_ID_KEY, String(alertsLastSeenId));
+}
+
+if ($("#alerts-btn")) $("#alerts-btn").addEventListener("click", toggleAlerts);
+renderAlertsButton();
+
 async function refresh() {
-  await Promise.all([loadHealth(), loadSummary(), loadEvents(), loadIdentity(), loadDomains()]);
+  await Promise.all([loadHealth(), loadSummary(), loadEvents(), loadIdentity(), loadDomains(), pollCriticalResponses()]);
 }
 
 refresh();

@@ -697,6 +697,7 @@ class Warden:
             path=flow.request.path,
             content_type=ctype,
             dcg_only=True,
+            force_critical_on_dcg=True,
         )
 
         sample = _mask_sample(text)[:_SAMPLE_CHARS]

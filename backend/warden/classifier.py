@@ -123,12 +123,19 @@ class Classifier:
         path: str = "",
         content_type: str = "",
         dcg_only: bool = False,
+        force_critical_on_dcg: bool = False,
     ) -> Classification:
         # dcg_only: skip PII regex + LSTM, run DCG only. Used on the response
         # direction — the model echoing back user PII is operator-uninteresting
         # noise (the user just typed it), and the LSTM over-fires on response
         # bodies. Destructive-command detection is the only response signal
         # worth keeping.
+        # force_critical_on_dcg: when DCG fires, pin label to "critical"
+        # regardless of severity tier. Destructive commands are categorical,
+        # not graduated — a single hit shouldn't land at "low" because the
+        # saturating-sum scales it down. Used on response direction so any
+        # rm -rf / drop / terraform destroy / etc. surfaced by the model
+        # gets immediate operator attention.
         text = text or ""
         if dcg_only:
             re_hits = []
@@ -169,6 +176,16 @@ class Classifier:
         ir = intent_mod.classify(provider, method, path, content_type, text)
         effective = min(1.0, sensitivity * ir.factor)
         label = _clamp_label(label_for(effective), ir.clamp_label)
+
+        # Categorical floor for destructive commands. Applied AFTER the
+        # intent clamp so a "chat"-class flow can't down-rank a real
+        # destructive hit. Lift effective_sensitivity to 1.0 so the
+        # dashboard percentage matches the label (a "critical · 36%"
+        # badge would just look broken). Raw sensitivity / tier scores
+        # are preserved on the dataclass for audit.
+        if force_critical_on_dcg and dc_hits:
+            label = "critical"
+            effective = 1.0
 
         summary = self._summary(hits, tier1, tier2, sensitivity, ir)
         return Classification(
