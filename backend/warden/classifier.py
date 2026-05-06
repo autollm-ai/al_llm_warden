@@ -122,26 +122,36 @@ class Classifier:
         method: str = "POST",
         path: str = "",
         content_type: str = "",
+        dcg_only: bool = False,
     ) -> Classification:
+        # dcg_only: skip PII regex + LSTM, run DCG only. Used on the response
+        # direction — the model echoing back user PII is operator-uninteresting
+        # noise (the user just typed it), and the LSTM over-fires on response
+        # bodies. Destructive-command detection is the only response signal
+        # worth keeping.
         text = text or ""
-        re_hits, _re_score_raw = regex_engine.scan(text)
+        if dcg_only:
+            re_hits = []
+            re_score = 0.0
+        else:
+            re_hits, _re_score_raw = regex_engine.scan(text)
 
-        # Identity exemption: observe every email/IP, then for any hit
-        # whose raw value qualifies as user-owned (≥THRESHOLD recent
-        # recurrences), demote to a low-weight 'user_identity' category.
-        # Recompute the regex score from the filtered weights so the
-        # exempted hits don't drive the band.
-        re_hits = self._apply_identity_exemption(re_hits)
-        re_score = 0.0
-        for h in re_hits:
-            re_score = re_score + h.weight * (1.0 - re_score) * 0.6
-        re_score = min(re_score, 1.0)
+            # Identity exemption: observe every email/IP, then for any hit
+            # whose raw value qualifies as user-owned (≥THRESHOLD recent
+            # recurrences), demote to a low-weight 'user_identity' category.
+            # Recompute the regex score from the filtered weights so the
+            # exempted hits don't drive the band.
+            re_hits = self._apply_identity_exemption(re_hits)
+            re_score = 0.0
+            for h in re_hits:
+                re_score = re_score + h.weight * (1.0 - re_score) * 0.6
+            re_score = min(re_score, 1.0)
 
         dc_hits, dc_score = dcg.scan(text)
         hits = re_hits + dc_hits
         # Treat the two tier-1 pipelines as independent saturating signals.
         tier1 = re_score + (1.0 - re_score) * dc_score
-        tier2 = self._tier2_score(text) if self.model and self.tokenizer else 0.0
+        tier2 = 0.0 if dcg_only else (self._tier2_score(text) if self.model and self.tokenizer else 0.0)
 
         # Blend: take whichever signal is stronger and amplify with the other.
         base = max(tier1, tier2)

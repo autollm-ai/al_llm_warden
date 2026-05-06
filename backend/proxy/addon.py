@@ -93,14 +93,6 @@ def _is_scorable_response_ctype(ctype: str) -> bool:
 # Content-Type lied — skip rather than score noise.
 _REPLACEMENT_CHAR_LIMIT = 0.05
 
-# Minimum decoded text length before tier-2 is allowed to fire on a
-# RESPONSE body. The LSTM has no real signal on tiny payloads (version
-# strings, OK/heartbeat tokens, single UUIDs) and consistently over-fires
-# near 100%. Tier-1 regex still works fine on short bodies, but the
-# semantic head needs context to be meaningful. 32 chars ≈ a couple of
-# BPE tokens — anything shorter is metadata, not model output.
-_MIN_RESPONSE_SCORE_LEN = int(os.environ.get("WARDEN_MIN_RESPONSE_SCORE_LEN", "32"))
-
 # Path patterns that mean "this isn't model output, don't score the body".
 # Two matchers: substrings (anywhere in path) + file extensions (suffix).
 # Caught false positives:
@@ -188,6 +180,57 @@ _MAX_STREAM_CAPTURE = int(os.environ.get("WARDEN_MAX_STREAM_CAPTURE", str(512 * 
 # the proxy in ~1s, no rebuild needed. Default ON because that's the
 # whole point of monitoring response direction.
 _TAP_STREAMS = os.environ.get("WARDEN_TAP_STREAMS", "1").lower() in ("1", "true", "yes", "on")
+
+
+_BROTLI_WARNED = False
+
+
+def _decompress_stream_body(body: bytes, content_encoding: str) -> bytes:
+    """Decode a stream-tap buffer per Content-Encoding.
+
+    The streaming-response path captures wire bytes pre-decompression
+    (mitmproxy's stream callback runs before the content-encoding layer).
+    This restores the plaintext for SSE parsing. On decode failure we
+    return the original bytes — the parser will still fail soft and the
+    flow gets logged as 'scrub-empty', exactly the historic behavior.
+    """
+    global _BROTLI_WARNED
+    enc = (content_encoding or "").strip().lower()
+    if not enc or not body:
+        return body
+    try:
+        if "gzip" in enc:
+            import gzip
+            return gzip.decompress(body)
+        if "deflate" in enc:
+            import zlib
+            try:
+                return zlib.decompress(body)
+            except zlib.error:
+                # Some servers send raw DEFLATE without zlib wrapper.
+                return zlib.decompress(body, -zlib.MAX_WBITS)
+        if "br" in enc:
+            try:
+                import brotli  # type: ignore
+                return brotli.decompress(body)
+            except ImportError:
+                if not _BROTLI_WARNED:
+                    log.warning(
+                        "stream body is brotli-encoded but `brotli` is not installed — "
+                        "response classification will see compressed bytes. "
+                        "Add `brotli` to backend/requirements.txt to enable."
+                    )
+                    _BROTLI_WARNED = True
+                return body
+        if "zstd" in enc:
+            try:
+                import zstandard  # type: ignore
+                return zstandard.ZstdDecompressor().decompress(body)
+            except ImportError:
+                return body
+    except Exception as e:
+        log.warning("stream body decompress failed (ce=%r len=%d): %s", enc, len(body), e)
+    return body
 
 
 def _make_stream_tap(flow: "http.HTTPFlow"):
@@ -582,11 +625,16 @@ class Warden:
         # use mitmproxy's auto-decompressed content.
         if stream_buf is not None and len(stream_buf) > 0:
             body_bytes = bytes(stream_buf)
-            # SSE bodies are a stream of `data: {...}` lines, NOT a JSON
-            # document. Run the SSE extractor first to get just the
-            # assistant's text — feeding the raw event stream into the
-            # LSTM would score control metadata (event types, message
-            # IDs, finish reasons) and over-fire.
+            # `flow.response.stream`'s callback delivers wire-level chunks
+            # AFTER TLS decryption but BEFORE Content-Encoding decode. The
+            # buffered path (`flow.response.content`) auto-decompresses;
+            # the streaming path does not. Anthropic returns gzip-encoded
+            # SSE on /v1/messages, so without this step the parser sees
+            # 1f 8b ... gzip frames, finds zero `data:` lines, and every
+            # response gets stamped "scrub-empty" with DCG never running.
+            body_bytes = _decompress_stream_body(
+                body_bytes, flow.response.headers.get("content-encoding") or ""
+            )
             if is_sse:
                 text = _parse_sse_text(body_bytes)
                 if not text.strip():
@@ -635,13 +683,12 @@ class Warden:
         if not text.strip():
             _write_skipped("scrub-empty", len(body_bytes))
             return
-        # Tier-2 needs context. Tiny bodies (version strings, "ok", single
-        # UUIDs, heartbeat tokens) carry no real signal and the LSTM
-        # over-fires on them. Skip below the floor — tier-1 still ran on
-        # the request, so secrets aren't missed.
-        if len(text.strip()) < _MIN_RESPONSE_SCORE_LEN:
-            _write_skipped("too-short", len(body_bytes))
-            return
+        # Note: the historical 32-char min-length floor was here to keep the
+        # LSTM from over-firing on tiny payloads. With dcg_only=True on the
+        # response path, the LSTM no longer runs, and DCG is precisely the
+        # case where short strings matter ("rm -rf" is 6 chars). Floor
+        # removed; if it ever needs to come back for a different signal,
+        # gate it on something other than length.
 
         result = self.classifier.classify(
             text,
@@ -649,6 +696,7 @@ class Warden:
             method=flow.request.method,
             path=flow.request.path,
             content_type=ctype,
+            dcg_only=True,
         )
 
         sample = _mask_sample(text)[:_SAMPLE_CHARS]

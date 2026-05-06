@@ -496,7 +496,10 @@ done
 if [ -n "$SYS_BUNDLE" ]; then
   TMP_BUNDLE="$(mktemp)"
   cat "$SYS_BUNDLE" "$CA_FILE" > "$TMP_BUNDLE"
-  run_as_user mv -f "$TMP_BUNDLE" "$COMBINED_BUNDLE"
+  # Move as the invoking identity (root under sudo, user otherwise). Doing this
+  # via run_as_user fails under sudo: /tmp's sticky bit blocks the unprivileged
+  # user from unlinking a root-owned tempfile. chown below normalizes ownership.
+  mv -f "$TMP_BUNDLE" "$COMBINED_BUNDLE"
   chown "$TARGET_USER:$TARGET_GROUP" "$COMBINED_BUNDLE" 2>/dev/null || true
   chmod 0644 "$COMBINED_BUNDLE"
   ok "Combined CA bundle written to $COMBINED_BUNDLE ($(wc -l < "$COMBINED_BUNDLE") lines)"
