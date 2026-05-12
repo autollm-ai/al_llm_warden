@@ -1,0 +1,32 @@
+$ /usr/bin/curl -v --max-time 10 -x http://127.0.0.1:8080 -o /dev/null -w \nHTTP_CODE=%{http_code}\n https://www.google.com/
+
+* Uses proxy env variable NO_PROXY == 'localhost,127.0.0.1,::1'
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+* CONNECT tunnel: HTTP/1.1 negotiated
+* allocate connect buffer
+* Establish HTTP proxy tunnel to www.google.com:443
+> CONNECT www.google.com:443 HTTP/1.1
+> Host: www.google.com:443
+> User-Agent: curl/8.7.1
+> Proxy-Connection: Keep-Alive
+> 
+< HTTP/1.1 200 Connection established
+< 
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+* ALPN: curl offers h2,http/1.1
+* (304) (OUT), TLS handshake, Client hello (1):
+} [319 bytes data]
+*  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem
+*  CApath: none
+  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:05 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:06 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:07 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:08 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:09 --:--:--     0* Connection timed out after 10002 milliseconds
+  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0
+* Closing connection
+curl: (28) Connection timed out after 10002 milliseconds
+
+HTTP_CODE=000
+
+[exit=28]

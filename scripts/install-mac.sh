@@ -18,6 +18,7 @@ CA_FILE="${CA_FILE:-./mitmproxy-ca.pem}"
 PROXY_HOST="${PROXY_HOST:-127.0.0.1}"
 PROXY_PORT="${PROXY_PORT:-8080}"
 DASHBOARD_URL="${DASHBOARD_URL:-http://localhost:8090}"
+CA_NICKNAME="warden-mitmproxy"
 
 # ── Brand logo (printed before any other output for instant recall) ────────
 print_logo() {
@@ -225,16 +226,211 @@ until docker exec warden-proxy test -f /home/mitmproxy/.mitmproxy/mitmproxy-ca-c
 done
 ok "Proxy CA generated"
 
+# Self-heal: a stale ./mitmproxy-ca.pem from a prior install where the
+# warden-mitm volume has since been recreated will trust the WRONG CA into
+# the keychain. Always start from a clean slate when CA_FILE is the default
+# path. (Refuse to clobber a non-default path the user explicitly set.)
+if [ "$CA_FILE" = "./mitmproxy-ca.pem" ] && [ -e "$CA_FILE" ] && [ ! -w "$CA_FILE" ]; then
+  step "Cleaning up stale root-owned $CA_FILE from a prior run"
+  sudo rm -f "$CA_FILE"
+fi
+
 # ── 3. Copy CA out of the container ────────────────────────────────────────
+# Tried-and-failed methods we've seen on macOS:
+#   * 'docker cp file' under Docker Desktop / Colima can report success but
+#     write nothing useful into the host path when the runtime VM has its
+#     own filesystem confinement. Same class of bug as snap-Docker on Linux.
+#   * Plain 'docker exec cat > file' under those runtimes can exit 0 with
+#     no bytes on stdout.
+# What works EVERYWHERE: fetch the CA from mitmproxy's own self-served
+# endpoint (http://mitm.it/cert/pem) via the proxy. No docker access needed
+# at all, and this is the documented retrieval method per the mitmproxy docs.
+# Always validate as a real PEM before we hand it to `security
+# add-trusted-cert` — trusting a 0-byte file silently breaks every site.
 step "Copying CA → $CA_FILE"
-docker cp warden-proxy:/home/mitmproxy/.mitmproxy/mitmproxy-ca-cert.pem "$CA_FILE" >/dev/null
-ok "CA written to $CA_FILE"
+CA_PATH_IN_CTR="/home/mitmproxy/.mitmproxy/mitmproxy-ca-cert.pem"
+TMP_CA="$(mktemp -t warden-ca)"
+
+is_valid_pem() {
+  [ -s "$1" ] && grep -q 'BEGIN CERTIFICATE' "$1"
+}
+
+copy_method=""
+
+# Method 1 (preferred): fetch via the proxy's mitm.it endpoint. Bypasses
+# docker entirely and proves the proxy is reachable on the host.
+if [ -z "$copy_method" ]; then
+  : > "$TMP_CA"
+  if curl -sSf --max-time 10 -x "http://${PROXY_HOST}:${PROXY_PORT}" \
+       http://mitm.it/cert/pem -o "$TMP_CA" 2>/dev/null && is_valid_pem "$TMP_CA"; then
+    copy_method="mitm.it/cert/pem (via proxy)"
+  fi
+fi
+
+# Method 2: docker exec ... cat. Cheap to try.
+if [ -z "$copy_method" ]; then
+  : > "$TMP_CA"
+  if docker exec warden-proxy cat "$CA_PATH_IN_CTR" > "$TMP_CA" 2>/dev/null && is_valid_pem "$TMP_CA"; then
+    copy_method="docker exec cat"
+  fi
+fi
+
+# Method 3: 'docker cp container:path -' tar-streamed to stdout.
+if [ -z "$copy_method" ] && command -v tar >/dev/null; then
+  : > "$TMP_CA"
+  if docker cp "warden-proxy:$CA_PATH_IN_CTR" - 2>/dev/null | tar -xO 2>/dev/null > "$TMP_CA" && is_valid_pem "$TMP_CA"; then
+    copy_method="docker cp tar-stream"
+  fi
+fi
+
+# Method 4: read straight from the named volume's mountpoint on the host
+# (works under Colima where the VM's filesystem is bind-mounted to the host).
+if [ -z "$copy_method" ]; then
+  : > "$TMP_CA"
+  for vol in al_llm_warden_warden-mitm warden-mitm; do
+    mp="$(docker volume inspect "$vol" --format '{{.Mountpoint}}' 2>/dev/null)"
+    [ -z "$mp" ] && continue
+    if sudo test -f "$mp/mitmproxy-ca-cert.pem" 2>/dev/null && \
+       sudo cat "$mp/mitmproxy-ca-cert.pem" > "$TMP_CA" 2>/dev/null && \
+       is_valid_pem "$TMP_CA"; then
+      copy_method="volume mountpoint ($mp)"
+      break
+    fi
+  done
+fi
+
+if [ -z "$copy_method" ]; then
+  rm -f "$TMP_CA"
+  echo ""
+  echo "  Diagnostic — what's in the container:"
+  docker exec warden-proxy ls -la /home/mitmproxy/.mitmproxy/ 2>&1 || true
+  echo ""
+  fail "All four CA-fetch methods failed. Make sure 'docker compose up' shows warden-proxy as healthy on port 8080."
+fi
+
+ok "Fetched via: $copy_method"
+mv -f "$TMP_CA" "$CA_FILE"
+if ! is_valid_pem "$CA_FILE"; then
+  fail "$CA_FILE is empty or not a PEM after copy. Aborting before we trust garbage."
+fi
+ok "CA written to $CA_FILE ($(wc -c < "$CA_FILE" | tr -d ' ') bytes)"
 
 # ── 4. Trust the CA in the System keychain ─────────────────────────────────
+# Drop any previously-trusted mitmproxy CA from prior installs first — if
+# the warden-mitm volume was recreated, the in-container CA now has a
+# different fingerprint and the stale keychain entry will keep failing
+# verification even after this fresh install.
+step "Removing any stale mitmproxy CA(s) from System keychain (so a recreated volume doesn't leave a stale trust)"
+while sudo security find-certificate -c "mitmproxy" -Z /Library/Keychains/System.keychain >/dev/null 2>&1; do
+  STALE_SHA=$(sudo security find-certificate -c "mitmproxy" -Z /Library/Keychains/System.keychain \
+              | awk -F: '/SHA-1 hash:/{print $2}' | tr -d ' ')
+  [ -z "$STALE_SHA" ] && break
+  sudo security delete-certificate -Z "$STALE_SHA" /Library/Keychains/System.keychain >/dev/null 2>&1 || break
+done
+ok "System keychain clear of old mitmproxy CAs"
+
 step "Trusting the CA in the System keychain (you'll be prompted for your macOS password)"
-sudo security add-trusted-cert -d -r trustRoot \
+# -p ssl -p basic: explicitly trust for SSL + basic policies. Without
+# explicit policies, Chrome's verifier on recent macOS (Chrome Root Store
+# rollout) sometimes rejects locally-installed roots that lack an SSL
+# trust setting. Belt-and-suspenders.
+sudo security add-trusted-cert -d -r trustRoot -p ssl -p basic \
   -k /Library/Keychains/System.keychain "$CA_FILE"
 ok "CA trusted system-wide"
+
+# CRITICAL FIX (macOS Sequoia 15.x and later):
+#   `add-trusted-cert` updates the on-disk admin trust DB at
+#   /Library/Security/Trust Settings/Admin.plist, but the running `trustd`
+#   daemon caches trust decisions in-process and does NOT re-read the DB
+#   automatically. Until trustd reloads, every TLS handshake — including
+#   Chrome/Safari/Arc/Edge URL loads and curl --proxy connections — calls
+#   into the cached "not trusted" answer for our brand-new CA. Symptom:
+#   the (i) icon in the address bar says "Your connection is not secure"
+#   on every LLM site even though the cert IS now in the keychain and
+#   marked trusted. Before adding this flush, the verify step at the end
+#   could pass (it reads disk via openssl x509) while browsers still fail
+#   (they read trustd via SecTrustEvaluate). SIGHUP makes trustd reload
+#   without dropping in-flight evaluations; if launchd respawns, the new
+#   instance reads fresh state too. macOS-only — Linux has no equivalent.
+step "Refreshing macOS trust daemon so browsers see the new trust"
+sudo killall -HUP trustd 2>/dev/null || true
+# trustd reloads its DB asynchronously after HUP — give it a beat to settle
+# before we hand off to the verification step that depends on it.
+sleep 1
+ok "Trust daemon (trustd) refreshed"
+
+# ── 4b. Verify browser trust BEFORE we flip the system proxy ───────────────
+#   ORDERING IS LOAD-BEARING. If trust is broken, the *next* sections enable
+#   the system HTTP+HTTPS proxy and write HTTP_PROXY into ~/.zshrc. Doing
+#   that with broken trust leaves the user's machine in a state where every
+#   HTTPS request fails, INCLUDING claude-code calls home — they then can't
+#   even ask Claude for help debugging. So we probe trust here, while the
+#   user's network state is still untouched, and bail out cleanly before
+#   touching networksetup if it's wrong.
+#   The probe uses /usr/bin/curl (links Apple Secure Transport, reads the
+#   System keychain — same trust path Safari/Chrome/Arc/Edge use). Homebrew
+#   curl links LibreSSL with /etc/ssl/cert.pem and would silently lie.
+#   Note: --proxy is passed explicitly, so this works WITHOUT the system
+#   proxy being enabled yet.
+step "Verifying browsers will accept the cert (before changing any network settings)"
+SYS_CURL="/usr/bin/curl"
+verify_browser_trust() {
+  local out rc
+  out=$("$SYS_CURL" -sS --max-time 8 \
+       --proxy "http://${PROXY_HOST}:${PROXY_PORT}" \
+       -o /dev/null -w "%{http_code}" \
+       -H "Authorization: Bearer sk-fake-validator-token-123456789" \
+       https://api.openai.com/v1/models 2>&1)
+  rc=$?
+  if [ "$rc" = "0" ]; then echo "ok"
+  elif printf '%s' "$out" | grep -qiE 'certificate|SSL'; then echo "cert-rejected"
+  elif [ "$rc" = "35" ] || [ "$rc" = "51" ] || [ "$rc" = "60" ] \
+    || [ "$rc" = "77" ] || [ "$rc" = "83" ]; then echo "cert-rejected"
+  else echo "offline"
+  fi
+}
+
+if [ ! -x "$SYS_CURL" ]; then
+  warn "/usr/bin/curl missing — can't verify browser trust path. Continuing anyway."
+else
+  result=$(verify_browser_trust)
+  case "$result" in
+    ok)
+      ok "TLS chain validates via System keychain — browsers will trust it"
+      ;;
+    offline)
+      warn "Couldn't reach api.openai.com via the proxy (offline?) — skipping browser-trust check.
+        If you see 'Not Secure' in the address bar after install, re-run with network access." ;;
+    cert-rejected)
+      # On-disk trust says yes, but trustd's cached answer says no. SIGHUP
+      # didn't stick; force a full restart (launchd respawns within ~50ms).
+      warn "Browser-trust path failing despite trust on disk. Forcing a hard trustd restart."
+      sudo killall trustd 2>/dev/null || true
+      sleep 2
+      result2=$(verify_browser_trust)
+      if [ "$result2" = "ok" ]; then
+        ok "TLS chain validates after trustd restart — browsers will trust it"
+      else
+        echo ""
+        echo "  Diagnostic dump (cert IS in keychain but Apple Secure Transport rejects it):"
+        echo "    System keychain mitmproxy cert:"
+        sudo security find-certificate -c mitmproxy -Z /Library/Keychains/System.keychain 2>&1 \
+          | sed 's/^/      /' | head -8
+        echo ""
+        # IMPORTANT: do NOT enable the system proxy on this failure path —
+        # we haven't touched networksetup yet, so the user's machine is
+        # still in its pre-install state. They can keep using claude-code
+        # to debug. Tell them how to clean up the trust we DID add.
+        fail "System keychain trust isn't being honored by Apple Secure Transport even after a trustd restart.
+       Stopping HERE so we don't enable the system proxy on a broken trust path —
+       your machine is still in its pre-install state and claude-code still works.
+       Recovery: bash scripts/uninstall-mac.sh (removes the trusted CA we just added)
+       Then reboot and try again. If it still fails after a reboot, share the
+       diagnostic above."
+      fi
+      ;;
+  esac
+fi
 
 # ── 5. Flip macOS proxy ────────────────────────────────────────────────────
 # SAFETY: snapshot the user's *current* networksetup proxy state to
@@ -350,6 +546,13 @@ else
   COMBINED_BUNDLE="$HOME/.config/warden/mitmproxy-ca.pem"
 fi
 
+# NODE_EXTRA_CA_CERTS: Node ignores SSL_CERT_FILE/REQUESTS_CA_BUNDLE and
+# uses its own bundled CA store. Without this var, every Node-based client
+# (Claude Code, Cursor, npm, gh-cli on Node, etc.) rejects warden's MITM
+# cert during TLS handshake — symptom in mitmproxy.log is a steady drip
+# of "Client TLS handshake failed. The client disconnected during the
+# handshake. ... this may indicate that the client does not trust the
+# proxy's certificate" for api.anthropic.com / claude.ai.
 WARDEN_RC_BLOCK="$WARDEN_RC_BEGIN
 export HTTP_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export HTTPS_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
@@ -357,6 +560,7 @@ export ALL_PROXY=http://${PROXY_HOST}:${PROXY_PORT}
 export NO_PROXY=localhost,127.0.0.1,::1
 export REQUESTS_CA_BUNDLE=$COMBINED_BUNDLE
 export SSL_CERT_FILE=$COMBINED_BUNDLE
+export NODE_EXTRA_CA_CERTS=$COMBINED_BUNDLE
 $WARDEN_RC_END"
 
 for rc in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc"; do
@@ -375,14 +579,20 @@ done
 note "Open a new terminal (or run 'source ~/.zshrc') for env vars to take effect."
 
 # ── 6. Verify ──────────────────────────────────────────────────────────────
-step "Verifying the proxy is in the path"
+# Browser-trust was already verified BEFORE we touched networksetup
+# (see step 4b above) so we don't re-test it here. The remaining checks
+# are cosmetic / informational:
+#   - chain verifies against on-disk CA via the system proxy (sanity)
+#   - dashboard responds on localhost
+step "Verifying the proxy chain end-to-end"
 if curl -sS --max-time 8 --cacert "$CA_FILE" \
+     --proxy "http://${PROXY_HOST}:${PROXY_PORT}" \
      -o /dev/null -w "%{http_code}\n" \
      -H "Authorization: Bearer sk-fake-validator-token-123456789" \
      https://api.openai.com/v1/models 2>/dev/null | grep -qE "^[1-5][0-9][0-9]$"; then
-  ok "Reached api.openai.com via the proxy"
+  ok "Reached api.openai.com via the proxy (chain verifies against on-disk CA)"
 else
-  warn "Couldn't reach api.openai.com (offline?) — that's fine; the proxy is still active."
+  warn "Couldn't reach api.openai.com via proxy (offline?) — that's fine; the proxy is still active."
 fi
 
 if curl -sS --max-time 5 --noproxy '*' "$DASHBOARD_URL/api/health" >/dev/null 2>&1; then
@@ -453,7 +663,34 @@ if [ "$DO_CLAUDE" = "1" ]; then
   configure_claude_code
 fi
 
-# ── 8. Quit browsers so they re-read trust on next launch ──────────────────
+# ── 8. Verify the cert in the System keychain matches what mitmproxy is
+#       actually serving. If they disagree (e.g. stale CA from before the
+#       warden-mitm volume was recreated), the install "succeeded" but
+#       Chrome / Safari will still throw NET::ERR_CERT_AUTHORITY_INVALID
+#       and websites won't load. Fail loudly here instead of letting the
+#       user discover it in the browser.
+step "Verifying System-keychain trust matches the live proxy CA"
+DISK_FP="$(openssl x509 -in "$CA_FILE" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2 | tr -d ': ' | tr 'a-f' 'A-F')"
+KC_FP="$(sudo security find-certificate -c "mitmproxy" -p /Library/Keychains/System.keychain 2>/dev/null \
+         | openssl x509 -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2 | tr -d ': ' | tr 'a-f' 'A-F')"
+if [ -n "$DISK_FP" ] && [ -n "$KC_FP" ] && [ "$DISK_FP" = "$KC_FP" ]; then
+  ok "Fingerprints match (${DISK_FP:0:23}…)"
+elif [ -z "$KC_FP" ]; then
+  fail "mitmproxy CA not found in System keychain after install. Browsers will reject the cert. Re-run this installer; if it keeps failing, run 'scripts/uninstall-mac.sh' first."
+else
+  warn "System-keychain fingerprint differs from disk CA — browsers will still reject. Forcing a re-add."
+  while sudo security find-certificate -c "mitmproxy" -Z /Library/Keychains/System.keychain >/dev/null 2>&1; do
+    SHA=$(sudo security find-certificate -c "mitmproxy" -Z /Library/Keychains/System.keychain \
+          | awk -F: '/SHA-1 hash:/{print $2}' | tr -d ' ')
+    [ -z "$SHA" ] && break
+    sudo security delete-certificate -Z "$SHA" /Library/Keychains/System.keychain >/dev/null 2>&1 || break
+  done
+  sudo security add-trusted-cert -d -r trustRoot -p ssl -p basic \
+    -k /Library/Keychains/System.keychain "$CA_FILE"
+  ok "Re-added; verify with 'security find-certificate -c mitmproxy -p /Library/Keychains/System.keychain'"
+fi
+
+# ── 9. Quit browsers so they re-read trust on next launch ──────────────────
 # Newly-trusted CAs in the System keychain are picked up by Safari/Chrome
 # only on next launch. SAFETY:
 #   • Apple Events (osascript) target the actual GUI app — they can never

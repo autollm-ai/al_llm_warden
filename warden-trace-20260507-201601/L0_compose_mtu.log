@@ -1,0 +1,8 @@
+$ grep -A5 warden-net: /Users/apple/Projects/al_llm_warden/docker-compose.yml
+
+  warden-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1280
+
+[exit=0]

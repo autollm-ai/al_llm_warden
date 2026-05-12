@@ -1,0 +1,9 @@
+$ security verify-cert -c /Users/apple/.config/warden/mitmproxy-ca.pem -p ssl
+
+...certificate verification successful.
+---
+No extended validation result found
+Certificate Transparency (CT) status: [31mnot verified[0m
+Unable to find at least 2 signed certificate timestamps (SCTs) from approved logs
+
+[exit=0]

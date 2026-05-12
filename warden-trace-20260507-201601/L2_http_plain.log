@@ -1,0 +1,6 @@
+$ /usr/bin/curl -sS --max-time 10 -x http://127.0.0.1:8080 -o /dev/null -w %{http_code} %{time_total}s\n http://example.com/
+
+curl: (28) Operation timed out after 10003 milliseconds with 0 bytes received
+000 10.003086s
+
+[exit=28]

@@ -1,0 +1,9 @@
+/Users/apple/.config/warden/mitmproxy-ca.pem fingerprint: 9861936001A630710801282090C9302A58B72098F3811C20F6DB64AA25AD04DD
+ls -la /Users/apple/.config/warden/mitmproxy-ca.pem:
+-rw-------@ 1 apple  staff  1172 May  7 20:15 /Users/apple/.config/warden/mitmproxy-ca.pem
+
+/Users/apple/.config/warden/warden-ca-bundle.pem size: 334655 bytes
+
+System keychain mitmproxy CA fingerprint: 9861936001A630710801282090C9302A58B72098F3811C20F6DB64AA25AD04DD
+
+Container mitmproxy CA fingerprint: 9861936001A630710801282090C9302A58B72098F3811C20F6DB64AA25AD04DD

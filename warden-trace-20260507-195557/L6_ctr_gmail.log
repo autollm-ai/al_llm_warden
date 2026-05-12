@@ -1,0 +1,8 @@
+$ docker exec warden-proxy sh -c 
+  echo "" | timeout 8 openssl s_client -connect mail.google.com:443 -servername mail.google.com -brief 2>&1 | head -10
+
+
+Connecting to 142.250.193.133
+207035BFFFFF0000:error:0A000126:SSL routines::unexpected eof while reading:../ssl/record/rec_layer_s3.c:698:
+
+[exit=0]

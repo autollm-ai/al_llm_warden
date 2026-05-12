@@ -1,0 +1,5 @@
+$ /usr/bin/nc -u -v -w 5 mail.google.com 443
+
+Connection to mail.google.com port 443 [udp/https] succeeded!
+
+[exit=0]

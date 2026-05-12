@@ -7,7 +7,18 @@ services:
     container_name: warden-proxy
     command: ["warden-proxy"]
     ports:
-      - "8080:8080"             # the HTTP/HTTPS proxy port
+      # Bind to loopback only. Plain "8080:8080" exposes on 0.0.0.0 — anyone
+      # on the LAN (or, if a router forwards 8080, anyone on the internet)
+      # can use this as an open proxy. Once install-mac.sh enables the
+      # system proxy here, off-host scanners saturate mitmproxy at hundreds
+      # of conns/sec and the user's own loopback flows queue behind them,
+      # which manifests as "every site times out" + intermittent SSL errors
+      # under load. (Observed on macOS with WARP/VPN active: traffic looped
+      # back through Cloudflare anycast IPs; ~91k off-host conns/min logged
+      # before this change.)
+      - "127.0.0.1:8080:8080"   # the HTTP/HTTPS proxy port
+    networks:
+      - warden-net
     volumes:
       - warden-data:/data       # SQLite event store
       - warden-models:/models   # bpe.json + lstm.pt
@@ -36,6 +47,17 @@ services:
       # traffic. Flip to 1 once you've audited a week of response events
       # and confirmed no false positives at high/critical.
       - WARDEN_GUARDRAIL_RESPONSES=${WARDEN_GUARDRAIL_RESPONSES:-0}
+      # Deep-trace mode. When 1, entrypoint.sh also starts tcpdump,
+      # loads debug_addon.py, and bumps mitmdump verbosity. Artifacts
+      # land in /data (warden-cap.pcap, warden-deep-trace.jsonl,
+      # warden-sockets.log, warden-tcpdump.log). Off by default.
+      - WARDEN_DEEP_TRACE=${WARDEN_DEEP_TRACE:-0}
+    cap_add:
+      # tcpdump needs NET_RAW / NET_ADMIN to put eth0 in promisc mode.
+      # No-op when WARDEN_DEEP_TRACE=0; container drops back to the
+      # default capability set as far as runtime behavior goes.
+      - NET_RAW
+      - NET_ADMIN
     user: "0:0"   # need write access to /home/mitmproxy/.mitmproxy
     restart: unless-stopped
     healthcheck:
@@ -51,7 +73,11 @@ services:
     depends_on:
       - warden-proxy
     ports:
-      - "8090:8090"             # dashboard + JSON API
+      # Loopback only — same reasoning as warden-proxy above. The dashboard
+      # has no auth and exposes captured event bodies; never publish it.
+      - "127.0.0.1:8090:8090"   # dashboard + JSON API
+    networks:
+      - warden-net
     volumes:
       - warden-data:/data
       - warden-models:/models
@@ -72,3 +98,19 @@ volumes:
   warden-data:
   warden-models:
   warden-mitm:
+
+# Custom bridge with explicit MTU. Default Docker bridge is 1500, but on
+# macOS the path container → vpnkit → host can clamp lower (utun tunnels
+# on this host run as low as 1000 MTU). When server-side TLS records
+# don't fit and ICMP "Frag Needed" doesn't propagate back through vpnkit,
+# the handshake hangs at exact cert delivery moment — diag showed this
+# pattern: openssl s_client to mail.google.com:443 from inside the
+# container hung after sending ClientHello, reproducing the user's
+# "every site times out when warden is on" symptom. 1380 is a safe value
+# (matches utun1's MTU on this host and Apple's iCloud Private Relay
+# typical MTU). If still failing, drop to 1280 (IPv6 minimum).
+networks:
+  warden-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1280

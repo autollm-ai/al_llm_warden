@@ -1,0 +1,837 @@
+[09:35:52.403][172.20.0.1:60366] client connect
+[09:35:52.403][172.20.0.1:60370] client connect
+[09:35:52.404][172.20.0.1:60372] client connect
+[09:35:52.404][172.20.0.1:60638] client connect
+[09:35:52.404][172.20.0.1:60644] client connect
+[09:35:52.404][172.20.0.1:60648] client connect
+[09:35:52.404][172.20.0.1:60652] client connect
+[09:35:52.404][172.20.0.1:60654] client connect
+[09:35:52.404][172.20.0.1:60656] client connect
+[09:35:52.405][172.20.0.1:60658] client connect
+[09:35:52.405][172.20.0.1:60670] client connect
+[09:35:52.405][172.20.0.1:60678] client connect
+[09:35:52.405][172.20.0.1:60686] client connect
+[09:35:52.405][172.20.0.1:60700] client connect
+[09:35:52.405][172.20.0.1:60706] client connect
+[09:35:52.405][172.20.0.1:60722] client connect
+[09:35:52.406][172.20.0.1:60728] client connect
+[09:35:52.406][172.20.0.1:60744] client connect
+[09:35:52.406][172.20.0.1:60746] client connect
+[09:35:52.406][172.20.0.1:60760] client connect
+[09:35:52.406][172.20.0.1:60762] client connect
+[09:35:52.406][172.20.0.1:60766] client connect
+[09:35:52.406][172.20.0.1:60780] client connect
+[09:35:52.406][172.20.0.1:60794] client connect
+[09:35:52.407][172.20.0.1:60796] client connect
+[09:35:52.407][172.20.0.1:60800] client connect
+[09:35:52.407][172.20.0.1:60810] client connect
+[09:35:52.407][172.20.0.1:60816] client connect
+[09:35:52.407][172.20.0.1:60832] client connect
+[09:35:52.407][172.20.0.1:60842] client connect
+[09:35:52.407][172.20.0.1:60854] client connect
+[09:35:52.407][172.20.0.1:60864] client connect
+[09:35:52.408][172.20.0.1:60870] client connect
+[09:35:52.408][172.20.0.1:60872] client connect
+[09:35:52.408][172.20.0.1:60890] client connect
+[09:35:52.408][172.20.0.1:63742] client connect
+[09:35:52.408][172.20.0.1:63754] client connect
+[09:35:52.408][172.20.0.1:63762] client connect
+[09:35:52.408][172.20.0.1:63772] client connect
+[09:35:52.408][172.20.0.1:63780] client connect
+[09:35:52.409][172.20.0.1:63796] client connect
+[09:35:52.409][172.20.0.1:63800] client connect
+[09:35:52.417][172.20.0.1:60350] server connect web.telegram.org:443 (149.154.167.99:443)
+172.20.0.1:60796: GET http://example.com/
+    Host: example.com
+    User-Agent: curl/8.7.1
+    Accept: */*
+    Proxy-Connection: Keep-Alive
+
+    content missing
+
+ << Client disconnected.
+[09:35:52.427][172.20.0.1:60746] client disconnect
+[09:35:52.427][172.20.0.1:60760] client disconnect
+[09:35:52.428][172.20.0.1:60762] client disconnect
+[09:35:52.428][172.20.0.1:60766] client disconnect
+[09:35:52.428][172.20.0.1:60780] client disconnect
+[09:35:52.428][172.20.0.1:60794] client disconnect
+[09:35:52.428][172.20.0.1:60796] client disconnect
+[09:35:52.429][172.20.0.1:60322] server connect api.anthropic.com:443 (160.79.104.10:443)
+[09:35:52.429][172.20.0.1:60360] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:35:52.436][172.20.0.1:63802] client connect
+[09:35:52.456][172.20.0.1:63818] client connect
+[09:35:52.457][172.20.0.1:63832] client connect
+[09:35:52.460][172.20.0.1:60800] client disconnect
+[09:35:52.468][172.20.0.1:60678] server connect dns.google:443 (8.8.4.4:443)
+[09:35:52.468][172.20.0.1:60638] server connect docs.google.com:443 (172.217.24.78:443)
+[09:35:52.468][172.20.0.1:60648] server connect play.google.com:443 (142.250.193.110:443)
+[09:35:52.468][172.20.0.1:60370] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.468][172.20.0.1:60656] server connect accounts.google.com:443 (192.178.211.84:443)
+[09:35:52.469][172.20.0.1:60372] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.469][172.20.0.1:60652] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:35:52.469][172.20.0.1:60670] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:35:52.470][172.20.0.1:60654] server connect www.google.com:443 (142.251.151.119:443)
+[09:35:52.475][172.20.0.1:60686] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.475][172.20.0.1:60658] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.475][172.20.0.1:60816] server connect docs.google.com:443 (172.217.24.78:443)
+[09:35:52.476][172.20.0.1:60810] server connect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.476][172.20.0.1:60832] server connect docs.google.com:443 (172.217.24.78:443)
+[09:35:52.477][172.20.0.1:63780] server connect www.google.com:443 (142.251.151.119:443)
+[09:35:52.479][172.20.0.1:60864] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:35:52.479][172.20.0.1:60870] server connect play.google.com:443 (142.250.193.110:443)
+[09:35:52.479][172.20.0.1:63742] server connect docs.google.com:443 (172.217.24.78:443)
+[09:35:52.479][172.20.0.1:60872] server connect play.google.com:443 (142.250.193.110:443)
+[09:35:52.479][172.20.0.1:60890] server connect play.google.com:443 (142.250.193.110:443)
+[09:35:52.481][172.20.0.1:63762] server connect docs.google.com:443 (172.217.24.78:443)
+[09:35:52.481][172.20.0.1:63844] client connect
+[09:35:52.481][172.20.0.1:63850] client connect
+[09:35:52.481][172.20.0.1:63856] client connect
+[09:35:52.481][172.20.0.1:63868] client connect
+[09:35:52.481][172.20.0.1:63874] client connect
+[09:35:52.481][172.20.0.1:63886] client connect
+[09:35:52.482][172.20.0.1:63902] client connect
+[09:35:52.482][172.20.0.1:63908] client connect
+[09:35:52.482][172.20.0.1:63910] client connect
+[09:35:52.484][172.20.0.1:63800] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:35:52.484][172.20.0.1:63772] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:35:52.484][172.20.0.1:63796] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:35:52.484][172.20.0.1:60854] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.484][172.20.0.1:63754] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.484][172.20.0.1:60366] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.485][172.20.0.1:60706] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:35:52.488][172.20.0.1:63912] client connect
+[09:35:52.488][172.20.0.1:63924] client connect
+[09:35:52.488][172.20.0.1:63932] client connect
+[09:35:52.488][172.20.0.1:63946] client connect
+[09:35:52.489][172.20.0.1:63956] client connect
+[09:35:52.489][172.20.0.1:63968] client connect
+[09:35:52.490][172.20.0.1:60728] server connect gmail.com:443 (172.217.24.229:443)
+[09:35:52.490][172.20.0.1:60644] server connect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:35:52.493][172.20.0.1:63996] client connect
+[09:35:52.494][172.20.0.1:63982] client connect
+[09:35:52.494][172.20.0.1:64012] client connect
+[09:35:52.494][172.20.0.1:64002] client connect
+[09:35:52.494][172.20.0.1:64020] client connect
+[09:35:52.494][172.20.0.1:64032] client connect
+[09:35:52.494][172.20.0.1:60744] server connect godaddy.in:443 (160.153.0.3:443)
+[09:35:52.494][172.20.0.1:63802] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:35:52.497][172.20.0.1:60722] server connect bam.nr-data.net:443 (162.247.241.14:443)
+[09:35:52.497][172.20.0.1:60700] server connect api.anthropic.com:443 (160.79.104.10:443)
+[09:35:52.501][172.20.0.1:64040] client connect
+[09:35:52.501][172.20.0.1:64056] client connect
+[09:35:52.501][172.20.0.1:64052] client connect
+[09:35:52.501][172.20.0.1:64082] client connect
+[09:35:52.502][172.20.0.1:64072] client connect
+[09:35:52.502][172.20.0.1:64092] client connect
+[09:35:52.502][172.20.0.1:64104] client connect
+[09:35:52.507][172.20.0.1:63818] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:35:52.508][172.20.0.1:64114] client connect
+[09:35:52.508][172.20.0.1:64116] client connect
+[09:35:52.508][172.20.0.1:64126] client connect
+[09:35:52.509][172.20.0.1:64138] client connect
+[09:35:52.516][172.20.0.1:64148] client connect
+[09:35:52.516][172.20.0.1:64150] client connect
+[09:36:11.878][172.20.0.1:64158] client connect
+[09:36:11.884][172.20.0.1:63844] server connect dns.google:443 (8.8.4.4:443)
+[09:36:11.885][172.20.0.1:63868] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.885][172.20.0.1:63856] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:11.885][172.20.0.1:60842] server connect share.coursera.org:443 (13.224.163.126:443)
+[09:36:11.886][172.20.0.1:63874] server connect accounts.google.com:443 (192.178.211.84:443)
+[09:36:11.887][172.20.0.1:63850] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.887][172.20.0.1:63902] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.887][172.20.0.1:60638] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.888][172.20.0.1:60366] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.888][172.20.0.1:63780] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:11.888][172.20.0.1:60816] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.888][172.20.0.1:60832] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.888][172.20.0.1:60176] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.888][172.20.0.1:60178] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:11.888][172.20.0.1:63742] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.889][172.20.0.1:63910] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:11.890][172.20.0.1:63886] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:36:11.890][172.20.0.1:63908] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.890][172.20.0.1:64168] client connect
+[09:36:11.890][172.20.0.1:64884] client connect
+[09:36:11.890][172.20.0.1:64898] client connect
+[09:36:11.890][172.20.0.1:64910] client connect
+[09:36:11.890][172.20.0.1:64916] client connect
+[09:36:11.890][172.20.0.1:64932] client connect
+[09:36:11.891][172.20.0.1:64944] client connect
+[09:36:11.891][172.20.0.1:64956] client connect
+[09:36:11.891][172.20.0.1:64968] client connect
+[09:36:11.891][172.20.0.1:58178] client connect
+[09:36:11.894][172.20.0.1:60700] client disconnect
+[09:36:11.894][172.20.0.1:60700] closing transports...
+[09:36:11.897][172.20.0.1:60638] client disconnect
+[09:36:11.897][172.20.0.1:60366] client disconnect
+[09:36:11.897][172.20.0.1:63780] client disconnect
+[09:36:11.897][172.20.0.1:60816] client disconnect
+[09:36:11.898][172.20.0.1:60832] client disconnect
+[09:36:11.898][172.20.0.1:60176] client disconnect
+[09:36:11.898][172.20.0.1:60178] client disconnect
+[09:36:11.898][172.20.0.1:63742] client disconnect
+[09:36:11.898][172.20.0.1:60700] Server TLS handshake failed. connection closed
+[09:36:11.898][172.20.0.1:60700] server disconnect api.anthropic.com:443 (160.79.104.10:443)
+[09:36:11.898][172.20.0.1:63932] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.899][172.20.0.1:63956] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.899][172.20.0.1:63924] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.899][172.20.0.1:63946] server connect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.899][172.20.0.1:63968] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:11.899][172.20.0.1:63912] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.902][172.20.0.1:63996] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:11.902][172.20.0.1:58186] client connect
+[09:36:11.902][172.20.0.1:58198] client connect
+[09:36:11.903][172.20.0.1:58202] client connect
+[09:36:11.903][172.20.0.1:58208] client connect
+[09:36:11.903][172.20.0.1:58218] client connect
+[09:36:11.903][172.20.0.1:58234] client connect
+[09:36:11.903][172.20.0.1:58242] client connect
+[09:36:11.904][172.20.0.1:58244] client connect
+[09:36:11.904][172.20.0.1:58248] client connect
+[09:36:11.904][172.20.0.1:58250] client connect
+[09:36:11.904][172.20.0.1:64002] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:11.904][172.20.0.1:63982] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:11.904][172.20.0.1:63968] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:11.905][172.20.0.1:63850] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.905][172.20.0.1:63924] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.905][172.20.0.1:63956] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.905][172.20.0.1:60194] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.905][172.20.0.1:60244] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+172.20.0.1:60700: GET https://api.anthropic.com/api/oauth/profile HTTP/2.0
+    user-agent: claude-browser-extension/1.0.70 (external) Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36
+    content-type: application/json
+    authorization: Bearer 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
+    accept: */*
+    sec-fetch-site: none
+    sec-fetch-mode: cors
+    sec-fetch-dest: empty
+    sec-fetch-storage-access: active
+    accept-encoding: gzip, deflate, br, zstd
+    accept-language: en-US,en;q=0.9,hi;q=0.8
+    cookie: CH-prefers-color-scheme=dark
+    cookie: __ssid=50b098a995480801a1d7019644fc89d
+    cookie: anthropic-consent-preferences=%7B%22analytics%22%3Afalse%2C%22marketing%22%3Afalse%7D
+    anthropic-client-platform: claude_browser_extension
+    anthropic-client-version: 1.0.70
+    priority: u=1, i
+    x-warden-scanned: 1
+    x-warden-label: clean
+    x-warden-intent: auth
+
+ << connection closed
+[09:36:11.907][172.20.0.1:60700] transports closed!
+[09:36:11.909][172.20.0.1:63832] server connect api.anthropic.com:443 (160.79.104.10:443)
+[09:36:11.909][172.20.0.1:64012] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:11.910][172.20.0.1:64020] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.910][172.20.0.1:64032] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.913][172.20.0.1:64020] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.913][172.20.0.1:64052] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:11.913][172.20.0.1:64082] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.913][172.20.0.1:64092] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.914][172.20.0.1:64072] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.914][172.20.0.1:64056] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:11.914][172.20.0.1:64040] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:11.914][172.20.0.1:64104] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.914][172.20.0.1:64150] Client TLS handshake failed. The client disconnected during the handshake. If this happens consistently for api.anthropic.com, this may indicate that the client does not trust the proxy's certificate.
+[09:36:11.916][172.20.0.1:63968] client disconnect
+[09:36:11.916][172.20.0.1:63850] client disconnect
+[09:36:11.916][172.20.0.1:63924] client disconnect
+[09:36:11.916][172.20.0.1:63956] client disconnect
+[09:36:11.916][172.20.0.1:60194] client disconnect
+[09:36:11.916][172.20.0.1:60244] client disconnect
+[09:36:11.917][172.20.0.1:64092] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.919][172.20.0.1:58256] client connect
+[09:36:11.919][172.20.0.1:58260] client connect
+[09:36:11.919][172.20.0.1:58270] client connect
+[09:36:11.919][172.20.0.1:58274] client connect
+[09:36:11.919][172.20.0.1:58288] client connect
+[09:36:11.920][172.20.0.1:58300] client connect
+[09:36:11.920][172.20.0.1:58312] client connect
+[09:36:11.920][172.20.0.1:58324] client connect
+[09:36:11.920][172.20.0.1:58330] client connect
+[09:36:11.922][172.20.0.1:64020] client disconnect
+[09:36:11.922][172.20.0.1:64126] server connect godaddy.in:443 (160.153.0.3:443)
+[09:36:11.923][172.20.0.1:64138] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.923][172.20.0.1:64116] server connect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:11.923][172.20.0.1:64114] server connect gmail.com:443 (172.217.24.229:443)
+[09:36:11.924][172.20.0.1:60196] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.924][172.20.0.1:60270] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:11.926][172.20.0.1:64092] client disconnect
+[09:36:11.928][172.20.0.1:64150] client disconnect
+[09:36:11.928][172.20.0.1:58336] client connect
+[09:36:11.929][172.20.0.1:58346] client connect
+[09:36:11.929][172.20.0.1:58362] client connect
+[09:36:11.929][172.20.0.1:58374] client connect
+[09:36:11.929][172.20.0.1:58386] client connect
+[09:36:11.929][172.20.0.1:58392] client connect
+[09:36:11.929][172.20.0.1:58408] client connect
+[09:36:11.929][172.20.0.1:58420] client connect
+[09:36:11.930][172.20.0.1:58424] client connect
+[09:36:11.930][172.20.0.1:58438] client connect
+[09:36:11.930][172.20.0.1:58444] client connect
+[09:36:11.932][172.20.0.1:64148] server connect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:11.935][172.20.0.1:60196] client disconnect
+[09:36:11.935][172.20.0.1:60270] client disconnect
+[09:36:11.941][172.20.0.1:64158] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:11.941][172.20.0.1:58452] client connect
+[09:36:11.943][172.20.0.1:58468] client connect
+[09:36:11.943][172.20.0.1:58472] client connect
+[09:36:11.943][172.20.0.1:58476] client connect
+[09:36:11.943][172.20.0.1:60208] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.943][172.20.0.1:60280] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:11.947][172.20.0.1:64916] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.947][172.20.0.1:64884] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.949][172.20.0.1:60208] client disconnect
+[09:36:11.949][172.20.0.1:60280] client disconnect
+[09:36:11.949][172.20.0.1:64898] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.949][172.20.0.1:58490] client connect
+[09:36:11.950][172.20.0.1:58502] client connect
+[09:36:11.950][172.20.0.1:64910] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.950][172.20.0.1:64956] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.951][172.20.0.1:64932] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:36:11.951][172.20.0.1:64968] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.951][172.20.0.1:64944] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.951][172.20.0.1:64168] server connect mtalk.google.com:443 (74.125.68.188:443)
+[09:36:11.957][172.20.0.1:60300] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:11.958][172.20.0.1:60222] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.962][172.20.0.1:58198] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.962][172.20.0.1:58218] server connect accounts.google.com:443 (192.178.211.84:443)
+[09:36:11.962][172.20.0.1:58242] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.962][172.20.0.1:58186] server connect dns.google:443 (8.8.4.4:443)
+[09:36:11.962][172.20.0.1:58244] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:11.962][172.20.0.1:58208] server connect share.coursera.org:443 (13.224.163.126:443)
+[09:36:11.963][172.20.0.1:58178] server connect fonts.googleapis.com:443 (142.250.183.202:443)
+[09:36:11.963][172.20.0.1:58234] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.963][172.20.0.1:58202] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:11.963][172.20.0.1:58248] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:36:11.963][172.20.0.1:58250] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.964][172.20.0.1:58234] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.964][172.20.0.1:58506] client connect
+[09:36:11.964][172.20.0.1:58516] client connect
+[09:36:11.964][172.20.0.1:58530] client connect
+[09:36:11.965][172.20.0.1:58524] client connect
+[09:36:11.965][172.20.0.1:58538] client connect
+[09:36:11.965][172.20.0.1:58550] client connect
+[09:36:11.965][172.20.0.1:58562] client connect
+[09:36:11.965][172.20.0.1:58560] client connect
+[09:36:11.965][172.20.0.1:58578] client connect
+[09:36:11.967][172.20.0.1:60300] client disconnect
+[09:36:11.990][172.20.0.1:60222] client disconnect
+[09:36:11.993][172.20.0.1:58260] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.994][172.20.0.1:60306] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:11.994][172.20.0.1:60234] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:11.995][172.20.0.1:58234] client disconnect
+[09:36:11.996][172.20.0.1:58260] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.996][172.20.0.1:58270] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.997][172.20.0.1:58256] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.999][172.20.0.1:58270] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:11.999][172.20.0.1:58300] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.999][172.20.0.1:58288] server connect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:11.999][172.20.0.1:58274] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:11.999][172.20.0.1:58336] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:11.999][172.20.0.1:58580] client connect
+[09:36:12.000][172.20.0.1:58592] client connect
+[09:36:12.000][172.20.0.1:58594] client connect
+[09:36:12.000][172.20.0.1:58600] client connect
+[09:36:12.000][172.20.0.1:58602] client connect
+[09:36:12.000][172.20.0.1:58616] client connect
+[09:36:12.000][172.20.0.1:58618] client connect
+[09:36:12.000][172.20.0.1:58620] client connect
+[09:36:12.000][172.20.0.1:58626] client connect
+[09:36:12.001][172.20.0.1:58638] client connect
+[09:36:12.001][172.20.0.1:58646] client connect
+[09:36:12.001][172.20.0.1:58324] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:12.001][172.20.0.1:58312] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:12.001][172.20.0.1:58330] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:12.002][172.20.0.1:58362] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:12.002][172.20.0.1:58392] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:12.003][172.20.0.1:60306] client disconnect
+[09:36:12.003][172.20.0.1:60234] client disconnect
+[09:36:12.003][172.20.0.1:58274] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:12.004][172.20.0.1:58386] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:12.004][172.20.0.1:58408] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:12.004][172.20.0.1:58424] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:12.004][172.20.0.1:58420] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:12.004][172.20.0.1:58346] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:12.005][172.20.0.1:58260] client disconnect
+[09:36:12.008][172.20.0.1:58408] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:12.008][172.20.0.1:58346] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:12.008][172.20.0.1:58438] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:12.008][172.20.0.1:58444] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:12.009][172.20.0.1:58270] client disconnect
+[09:36:12.011][172.20.0.1:58658] client connect
+[09:36:12.011][172.20.0.1:58672] client connect
+[09:36:12.011][172.20.0.1:58682] client connect
+[09:36:12.011][172.20.0.1:58696] client connect
+[09:36:12.012][172.20.0.1:58714] client connect
+[09:36:12.012][172.20.0.1:58704] client connect
+[09:36:12.012][172.20.0.1:58720] client connect
+[09:36:12.012][172.20.0.1:60242] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:12.012][172.20.0.1:60334] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:12.013][172.20.0.1:58274] client disconnect
+[09:36:31.251][172.20.0.1:58472] server connect gmail.com:443 (172.217.24.229:443)
+[09:36:31.251][172.20.0.1:58468] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.252][172.20.0.1:58476] server connect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:31.252][172.20.0.1:58452] server connect godaddy.in:443 (160.153.0.3:443)
+[09:36:31.254][172.20.0.1:58408] client disconnect
+[09:36:31.255][172.20.0.1:58346] client disconnect
+[09:36:31.257][172.20.0.1:58724] client connect
+[09:36:31.257][172.20.0.1:58738] client connect
+[09:36:31.257][172.20.0.1:58746] client connect
+[09:36:31.257][172.20.0.1:58758] client connect
+[09:36:31.257][172.20.0.1:58764] client connect
+[09:36:31.257][172.20.0.1:58766] client connect
+[09:36:31.257][172.20.0.1:58772] client connect
+[09:36:31.258][172.20.0.1:58780] client connect
+[09:36:31.258][172.20.0.1:58782] client connect
+[09:36:31.258][172.20.0.1:58798] client connect
+[09:36:31.260][172.20.0.1:60242] client disconnect
+[09:36:31.260][172.20.0.1:60334] client disconnect
+[09:36:31.264][172.20.0.1:58814] client connect
+[09:36:31.264][172.20.0.1:58818] client connect
+[09:36:31.264][172.20.0.1:58822] client connect
+[09:36:31.264][172.20.0.1:65012] client connect
+[09:36:31.265][172.20.0.1:65018] client connect
+[09:36:31.265][172.20.0.1:65024] client connect
+[09:36:31.265][172.20.0.1:65032] client connect
+[09:36:31.265][172.20.0.1:65046] client connect
+[09:36:31.265][172.20.0.1:65060] client connect
+[09:36:31.265][172.20.0.1:65076] client connect
+[09:36:31.265][172.20.0.1:65082] client connect
+[09:36:31.265][172.20.0.1:65088] client connect
+[09:36:31.266][172.20.0.1:65092] client connect
+[09:36:31.266][172.20.0.1:65096] client connect
+[09:36:31.266][172.20.0.1:65104] client connect
+[09:36:31.266][172.20.0.1:65110] client connect
+[09:36:31.266][172.20.0.1:65120] client connect
+[09:36:31.266][172.20.0.1:65126] client connect
+[09:36:31.266][172.20.0.1:65132] client connect
+[09:36:31.267][172.20.0.1:65146] client connect
+[09:36:31.267][172.20.0.1:65162] client connect
+[09:36:31.267][172.20.0.1:65176] client connect
+[09:36:31.267][172.20.0.1:65190] client connect
+[09:36:31.267][172.20.0.1:65202] client connect
+[09:36:31.267][172.20.0.1:65208] client connect
+[09:36:31.267][172.20.0.1:56822] client connect
+[09:36:31.268][172.20.0.1:56836] client connect
+[09:36:31.268][172.20.0.1:56838] client connect
+[09:36:31.268][172.20.0.1:56842] client connect
+[09:36:31.268][172.20.0.1:56856] client connect
+[09:36:31.268][172.20.0.1:56874] client connect
+[09:36:31.268][172.20.0.1:56858] client connect
+[09:36:31.268][172.20.0.1:56890] client connect
+[09:36:31.268][172.20.0.1:58502] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.270][172.20.0.1:63762] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.270][172.20.0.1:60370] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.270][172.20.0.1:60372] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.270][172.20.0.1:60644] server disconnect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:31.270][172.20.0.1:60658] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.271][172.20.0.1:60648] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.271][172.20.0.1:60654] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:31.271][172.20.0.1:60656] server disconnect accounts.google.com:443 (192.178.211.84:443)
+[09:36:31.271][172.20.0.1:60670] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.271][172.20.0.1:60728] server disconnect gmail.com:443 (172.217.24.229:443)
+[09:36:31.271][172.20.0.1:60686] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.271][172.20.0.1:60706] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.271][172.20.0.1:60722] server disconnect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:31.272][172.20.0.1:60744] server disconnect godaddy.in:443 (160.153.0.3:443)
+[09:36:31.272][172.20.0.1:60810] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.272][172.20.0.1:60842] server disconnect share.coursera.org:443 (13.224.163.126:443)
+[09:36:31.272][172.20.0.1:60854] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.272][172.20.0.1:60864] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.272][172.20.0.1:63754] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.272][172.20.0.1:60890] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.272][172.20.0.1:60870] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.272][172.20.0.1:60872] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.273][172.20.0.1:63772] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.273][172.20.0.1:63796] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.273][172.20.0.1:63800] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.273][172.20.0.1:64884] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.273][172.20.0.1:60336] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.273][172.20.0.1:60254] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.276][172.20.0.1:58490] server connect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:31.287][172.20.0.1:56904] client connect
+[09:36:31.292][172.20.0.1:63762] client disconnect
+[09:36:31.292][172.20.0.1:60370] client disconnect
+[09:36:31.292][172.20.0.1:60372] client disconnect
+[09:36:31.292][172.20.0.1:60644] client disconnect
+[09:36:31.292][172.20.0.1:60658] client disconnect
+[09:36:31.292][172.20.0.1:60648] client disconnect
+[09:36:31.292][172.20.0.1:60654] client disconnect
+[09:36:31.292][172.20.0.1:60656] client disconnect
+[09:36:31.292][172.20.0.1:60670] client disconnect
+[09:36:31.293][172.20.0.1:60728] client disconnect
+[09:36:31.293][172.20.0.1:60686] client disconnect
+[09:36:31.293][172.20.0.1:60706] client disconnect
+[09:36:31.293][172.20.0.1:60722] client disconnect
+[09:36:31.293][172.20.0.1:60744] client disconnect
+[09:36:31.293][172.20.0.1:60810] client disconnect
+[09:36:31.293][172.20.0.1:60842] client disconnect
+[09:36:31.293][172.20.0.1:60854] client disconnect
+[09:36:31.293][172.20.0.1:60864] client disconnect
+[09:36:31.293][172.20.0.1:63754] client disconnect
+[09:36:31.293][172.20.0.1:60890] client disconnect
+[09:36:31.293][172.20.0.1:60870] client disconnect
+[09:36:31.294][172.20.0.1:60872] client disconnect
+[09:36:31.294][172.20.0.1:63772] client disconnect
+[09:36:31.294][172.20.0.1:63796] client disconnect
+[09:36:31.294][172.20.0.1:63800] client disconnect
+[09:36:31.294][172.20.0.1:64884] client disconnect
+[09:36:31.294][172.20.0.1:60336] client disconnect
+[09:36:31.294][172.20.0.1:60254] client disconnect
+[09:36:31.294][172.20.0.1:58506] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.295][172.20.0.1:58524] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.295][172.20.0.1:58516] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.295][172.20.0.1:58550] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:36:31.295][172.20.0.1:58530] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.302][172.20.0.1:58822] client disconnect
+[09:36:31.302][172.20.0.1:58562] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.303][172.20.0.1:58538] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.304][172.20.0.1:58560] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.305][172.20.0.1:58578] server connect mtalk.google.com:443 (74.125.68.188:443)
+[09:36:31.305][172.20.0.1:58374] server connect api.anthropic.com:443 (160.79.104.10:443)
+[09:36:31.305][172.20.0.1:56908] client connect
+[09:36:31.305][172.20.0.1:56922] client connect
+[09:36:31.305][172.20.0.1:63868] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.305][172.20.0.1:64032] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.306][172.20.0.1:63908] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.306][172.20.0.1:64116] server disconnect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:31.306][172.20.0.1:63874] server disconnect accounts.google.com:443 (192.178.211.84:443)
+[09:36:31.306][172.20.0.1:63932] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.306][172.20.0.1:64104] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.306][172.20.0.1:63912] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.306][172.20.0.1:63902] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.306][172.20.0.1:64114] server disconnect gmail.com:443 (172.217.24.229:443)
+[09:36:31.306][172.20.0.1:63910] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:31.306][172.20.0.1:63856] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.307][172.20.0.1:64148] server disconnect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:31.307][172.20.0.1:63946] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.307][172.20.0.1:64072] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.307][172.20.0.1:64126] server disconnect godaddy.in:443 (160.153.0.3:443)
+[09:36:31.307][172.20.0.1:58208] server disconnect share.coursera.org:443 (13.224.163.126:443)
+[09:36:31.307][172.20.0.1:63996] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.307][172.20.0.1:64012] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.307][172.20.0.1:64082] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.307][172.20.0.1:63982] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.308][172.20.0.1:64040] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.308][172.20.0.1:64002] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.308][172.20.0.1:64056] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.308][172.20.0.1:64052] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.311][172.20.0.1:60278] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.312][172.20.0.1:58506] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.312][172.20.0.1:60360] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.320][172.20.0.1:63868] client disconnect
+[09:36:31.320][172.20.0.1:64032] client disconnect
+[09:36:31.320][172.20.0.1:63908] client disconnect
+[09:36:31.320][172.20.0.1:64116] client disconnect
+[09:36:31.320][172.20.0.1:63874] client disconnect
+[09:36:31.320][172.20.0.1:63932] client disconnect
+[09:36:31.320][172.20.0.1:64104] client disconnect
+[09:36:31.320][172.20.0.1:63912] client disconnect
+[09:36:31.320][172.20.0.1:63902] client disconnect
+[09:36:31.321][172.20.0.1:64114] client disconnect
+[09:36:31.321][172.20.0.1:63910] client disconnect
+[09:36:31.321][172.20.0.1:63856] client disconnect
+[09:36:31.321][172.20.0.1:64148] client disconnect
+[09:36:31.321][172.20.0.1:63946] client disconnect
+[09:36:31.322][172.20.0.1:64072] client disconnect
+[09:36:31.322][172.20.0.1:64126] client disconnect
+[09:36:31.322][172.20.0.1:58208] client disconnect
+[09:36:31.322][172.20.0.1:63996] client disconnect
+[09:36:31.322][172.20.0.1:64012] client disconnect
+[09:36:31.323][172.20.0.1:64082] client disconnect
+[09:36:31.323][172.20.0.1:63982] client disconnect
+[09:36:31.323][172.20.0.1:64040] client disconnect
+[09:36:31.323][172.20.0.1:64002] client disconnect
+[09:36:31.323][172.20.0.1:64056] client disconnect
+[09:36:31.323][172.20.0.1:64052] client disconnect
+[09:36:31.323][172.20.0.1:58580] server connect dns.google:443 (8.8.4.4:443)
+[09:36:31.323][172.20.0.1:58594] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.324][172.20.0.1:58592] server connect accounts.google.com:443 (192.178.211.84:443)
+[09:36:31.324][172.20.0.1:58600] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:31.324][172.20.0.1:58618] server connect share.coursera.org:443 (13.224.163.126:443)
+[09:36:31.324][172.20.0.1:56938] client connect
+[09:36:31.324][172.20.0.1:56944] client connect
+[09:36:31.324][172.20.0.1:56952] client connect
+[09:36:31.325][172.20.0.1:56954] client connect
+[09:36:31.325][172.20.0.1:56956] client connect
+[09:36:31.325][172.20.0.1:56970] client connect
+[09:36:31.325][172.20.0.1:56986] client connect
+[09:36:31.326][172.20.0.1:56992] client connect
+[09:36:31.326][172.20.0.1:56996] client connect
+[09:36:31.332][172.20.0.1:60278] client disconnect
+[09:36:31.332][172.20.0.1:58506] client disconnect
+[09:36:31.332][172.20.0.1:60360] client disconnect
+[09:36:31.333][172.20.0.1:58602] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.333][172.20.0.1:58646] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:36:31.333][172.20.0.1:58638] server connect fonts.googleapis.com:443 (142.250.183.202:443)
+[09:36:31.333][172.20.0.1:58616] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.333][172.20.0.1:58620] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.334][172.20.0.1:58626] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.340][172.20.0.1:58250] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.340][172.20.0.1:58362] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.340][172.20.0.1:58198] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.340][172.20.0.1:58476] server disconnect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:31.341][172.20.0.1:58256] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.341][172.20.0.1:58218] server disconnect accounts.google.com:443 (192.178.211.84:443)
+[09:36:31.341][172.20.0.1:58392] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.341][172.20.0.1:58444] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.341][172.20.0.1:58300] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.341][172.20.0.1:58242] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.342][172.20.0.1:58490] server disconnect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:31.342][172.20.0.1:58244] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:31.342][172.20.0.1:58312] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.342][172.20.0.1:58420] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.342][172.20.0.1:58618] server disconnect share.coursera.org:443 (13.224.163.126:443)
+[09:36:31.342][172.20.0.1:58202] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.342][172.20.0.1:58452] server disconnect godaddy.in:443 (160.153.0.3:443)
+[09:36:31.343][172.20.0.1:58472] server disconnect gmail.com:443 (172.217.24.229:443)
+[09:36:31.343][172.20.0.1:58336] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.343][172.20.0.1:58288] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.343][172.20.0.1:58438] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.343][172.20.0.1:58424] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.343][172.20.0.1:58330] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.343][172.20.0.1:58324] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.344][172.20.0.1:58386] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.347][172.20.0.1:58620] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.352][172.20.0.1:57008] client connect
+[09:36:31.353][172.20.0.1:63818] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.353][172.20.0.1:60292] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.358][172.20.0.1:58672] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.358][172.20.0.1:58658] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.365][172.20.0.1:58250] client disconnect
+[09:36:31.369][172.20.0.1:58362] client disconnect
+[09:36:31.370][172.20.0.1:58198] client disconnect
+[09:36:31.371][172.20.0.1:58476] client disconnect
+[09:36:31.371][172.20.0.1:58256] client disconnect
+[09:36:31.372][172.20.0.1:58218] client disconnect
+[09:36:31.372][172.20.0.1:58392] client disconnect
+[09:36:31.373][172.20.0.1:58444] client disconnect
+[09:36:31.373][172.20.0.1:58300] client disconnect
+[09:36:31.374][172.20.0.1:58242] client disconnect
+[09:36:31.374][172.20.0.1:58490] client disconnect
+[09:36:31.374][172.20.0.1:58244] client disconnect
+[09:36:31.375][172.20.0.1:58312] client disconnect
+[09:36:31.375][172.20.0.1:58420] client disconnect
+[09:36:31.375][172.20.0.1:58618] client disconnect
+[09:36:31.375][172.20.0.1:58202] client disconnect
+[09:36:31.375][172.20.0.1:58452] client disconnect
+[09:36:31.376][172.20.0.1:58472] client disconnect
+[09:36:31.376][172.20.0.1:58336] client disconnect
+[09:36:31.376][172.20.0.1:58288] client disconnect
+[09:36:31.377][172.20.0.1:58438] client disconnect
+[09:36:31.378][172.20.0.1:58424] client disconnect
+[09:36:31.378][172.20.0.1:58330] client disconnect
+[09:36:31.379][172.20.0.1:58324] client disconnect
+[09:36:31.379][172.20.0.1:58386] client disconnect
+[09:36:31.381][172.20.0.1:58672] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.381][172.20.0.1:58658] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.381][172.20.0.1:58720] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.382][172.20.0.1:58696] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.382][172.20.0.1:58682] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.382][172.20.0.1:58704] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:31.382][172.20.0.1:57024] client connect
+[09:36:31.383][172.20.0.1:57028] client connect
+[09:36:31.383][172.20.0.1:57030] client connect
+[09:36:31.384][172.20.0.1:57038] client connect
+[09:36:31.384][172.20.0.1:57042] client connect
+[09:36:31.384][172.20.0.1:57058] client connect
+[09:36:31.384][172.20.0.1:57066] client connect
+[09:36:31.384][172.20.0.1:57082] client connect
+[09:36:31.386][172.20.0.1:57086] client connect
+[09:36:31.386][172.20.0.1:57090] client connect
+[09:36:31.386][172.20.0.1:57096] client connect
+[09:36:31.387][172.20.0.1:58620] client disconnect
+[09:36:31.389][172.20.0.1:63818] client disconnect
+[09:36:31.389][172.20.0.1:60292] client disconnect
+[09:36:31.390][172.20.0.1:58704] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:31.390][172.20.0.1:58746] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.391][172.20.0.1:58758] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.391][172.20.0.1:58602] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.392][172.20.0.1:58594] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.392][172.20.0.1:58626] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.392][172.20.0.1:58682] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.392][172.20.0.1:58592] server disconnect accounts.google.com:443 (192.178.211.84:443)
+[09:36:31.392][172.20.0.1:58696] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.392][172.20.0.1:58600] server disconnect www.google.com:443 (142.251.151.119:443)
+[09:36:31.396][172.20.0.1:58746] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.396][172.20.0.1:58758] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.396][172.20.0.1:58714] server connect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.397][172.20.0.1:58798] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.397][172.20.0.1:58738] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.397][172.20.0.1:58766] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.397][172.20.0.1:58780] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.398][172.20.0.1:58764] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.398][172.20.0.1:58782] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.399][172.20.0.1:58724] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.399][172.20.0.1:58772] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.400][172.20.0.1:58720] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.400][172.20.0.1:58616] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.401][172.20.0.1:58672] client disconnect
+[09:36:31.401][172.20.0.1:58658] client disconnect
+[09:36:31.403][172.20.0.1:58714] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.403][172.20.0.1:58798] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.403][172.20.0.1:58738] server disconnect play.google.com:443 (142.250.193.110:443)
+[09:36:31.403][172.20.0.1:58766] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.404][172.20.0.1:58780] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.404][172.20.0.1:58764] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.404][172.20.0.1:58782] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.404][172.20.0.1:58724] server disconnect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.404][172.20.0.1:58772] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.404][172.20.0.1:65132] server connect connectivitycheck.gstatic.com:80 (142.250.67.67:80)
+[09:36:31.405][172.20.0.1:65046] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:31.405][172.20.0.1:58814] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.405][172.20.0.1:58818] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.405][172.20.0.1:65126] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.405][172.20.0.1:65024] server connect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:31.405][172.20.0.1:65096] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.406][172.20.0.1:65012] server connect mail.google.com:443 (142.250.182.101:443)
+[09:36:31.406][172.20.0.1:60298] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.406][172.20.0.1:64158] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.408][172.20.0.1:58704] client disconnect
+[09:36:31.410][172.20.0.1:58602] client disconnect
+[09:36:31.410][172.20.0.1:58594] client disconnect
+[09:36:31.411][172.20.0.1:58626] client disconnect
+[09:36:31.411][172.20.0.1:58682] client disconnect
+[09:36:31.411][172.20.0.1:58592] client disconnect
+[09:36:31.411][172.20.0.1:58696] client disconnect
+[09:36:31.411][172.20.0.1:58600] client disconnect
+[09:36:31.411][172.20.0.1:58814] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.411][172.20.0.1:58818] server disconnect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.412][172.20.0.1:65120] server connect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.412][172.20.0.1:65092] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.412][172.20.0.1:65018] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:31.412][172.20.0.1:65032] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.413][172.20.0.1:57106] client connect
+[09:36:31.413][172.20.0.1:57116] client connect
+[09:36:31.413][172.20.0.1:57122] client connect
+[09:36:31.413][172.20.0.1:57128] client connect
+[09:36:31.413][172.20.0.1:57134] client connect
+[09:36:31.414][172.20.0.1:57138] client connect
+[09:36:31.414][172.20.0.1:57146] client connect
+[09:36:31.417][172.20.0.1:58746] client disconnect
+[09:36:31.417][172.20.0.1:58758] client disconnect
+[09:36:31.418][172.20.0.1:58720] client disconnect
+[09:36:31.418][172.20.0.1:58616] client disconnect
+[09:36:31.572][172.20.0.1:65190] server connect optimizationguide-pa.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.572][172.20.0.1:65104] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.572][172.20.0.1:65162] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.572][172.20.0.1:56890] server connect godaddy.in:443 (160.153.0.3:443)
+[09:36:31.573][172.20.0.1:65082] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.574][172.20.0.1:56858] server connect gmail.com:443 (172.217.24.229:443)
+[09:36:31.574][172.20.0.1:56874] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.575][172.20.0.1:65060] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.575][172.20.0.1:65076] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:31.576][172.20.0.1:65110] server connect ssl.gstatic.com:443 (172.217.26.35:443)
+[09:36:31.576][172.20.0.1:65088] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.577][172.20.0.1:65176] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:31.578][172.20.0.1:58714] client disconnect
+[09:36:31.578][172.20.0.1:58798] client disconnect
+[09:36:31.578][172.20.0.1:58738] client disconnect
+[09:36:31.578][172.20.0.1:58766] client disconnect
+[09:36:31.578][172.20.0.1:58780] client disconnect
+[09:36:31.578][172.20.0.1:58764] client disconnect
+[09:36:31.578][172.20.0.1:58782] client disconnect
+[09:36:31.578][172.20.0.1:58724] client disconnect
+[09:36:31.579][172.20.0.1:58772] client disconnect
+[09:36:31.579][172.20.0.1:60298] client disconnect
+[09:36:31.579][172.20.0.1:64158] client disconnect
+[09:36:31.581][172.20.0.1:56890] server disconnect godaddy.in:443 (160.153.0.3:443)
+[09:36:31.581][172.20.0.1:56858] server disconnect gmail.com:443 (172.217.24.229:443)
+[09:36:31.582][172.20.0.1:57162] client connect
+[09:36:31.582][172.20.0.1:57176] client connect
+[09:36:31.582][172.20.0.1:57182] client connect
+[09:36:31.582][172.20.0.1:57198] client connect
+[09:36:31.583][172.20.0.1:57202] client connect
+[09:36:31.583][172.20.0.1:57204] client connect
+[09:36:31.583][172.20.0.1:57208] client connect
+[09:36:31.583][172.20.0.1:57212] client connect
+[09:36:31.584][172.20.0.1:57220] client connect
+[09:36:31.584][172.20.0.1:57222] client connect
+[09:36:31.584][172.20.0.1:57234] client connect
+[09:36:31.584][172.20.0.1:57244] client connect
+[09:36:31.584][172.20.0.1:57256] client connect
+[09:36:31.584][172.20.0.1:57270] client connect
+[09:36:31.584][172.20.0.1:57286] client connect
+[09:36:31.585][172.20.0.1:57290] client connect
+[09:36:31.585][172.20.0.1:57300] client connect
+[09:36:31.585][172.20.0.1:56836] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.585][172.20.0.1:56904] server connect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:31.585][172.20.0.1:56842] server connect content-autofill.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.586][172.20.0.1:65202] server connect www.linkedin.com:443 (150.171.22.12:443)
+[09:36:31.586][172.20.0.1:56856] server connect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:31.586][172.20.0.1:56838] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.587][172.20.0.1:56822] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.589][172.20.0.1:58814] client disconnect
+[09:36:31.589][172.20.0.1:58818] client disconnect
+[09:36:31.591][172.20.0.1:56904] server disconnect waa-pa.clients6.google.com:443 (172.217.26.42:443)
+[09:36:31.593][172.20.0.1:65146] server connect android.clients.google.com:443 (142.251.223.142:443)
+[09:36:31.595][172.20.0.1:58502] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.596][172.20.0.1:60314] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.602][172.20.0.1:57314] client connect
+[09:36:31.602][172.20.0.1:57328] client connect
+[09:36:31.602][172.20.0.1:57342] client connect
+[09:36:31.602][172.20.0.1:57348] client connect
+[09:36:31.602][172.20.0.1:57356] client connect
+[09:36:31.603][172.20.0.1:57370] client connect
+[09:36:31.603][172.20.0.1:57376] client connect
+[09:36:31.603][172.20.0.1:57390] client connect
+[09:36:31.603][172.20.0.1:57380] client connect
+[09:36:31.603][172.20.0.1:57392] client connect
+[09:36:31.604][172.20.0.1:57404] client connect
+[09:36:31.604][172.20.0.1:57408] client connect
+[09:36:31.604][172.20.0.1:57414] client connect
+[09:36:31.604][172.20.0.1:56908] server connect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.605][172.20.0.1:56922] server connect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:31.610][172.20.0.1:56890] client disconnect
+[09:36:31.611][172.20.0.1:56858] client disconnect
+[09:36:31.616][172.20.0.1:56922] server disconnect bam.nr-data.net:443 (162.247.241.14:443)
+[09:36:31.619][172.20.0.1:56904] client disconnect
+[09:36:31.621][172.20.0.1:58502] client disconnect
+[09:36:31.621][172.20.0.1:60314] client disconnect
+[09:36:31.622][172.20.0.1:57430] client connect
+[09:36:31.622][172.20.0.1:57446] client connect
+[09:36:31.622][172.20.0.1:57450] client connect
+[09:36:31.622][172.20.0.1:57466] client connect
+[09:36:31.623][172.20.0.1:57472] client connect
+[09:36:31.623][172.20.0.1:57480] client connect
+[09:36:31.623][172.20.0.1:57486] client connect
+[09:36:31.623][172.20.0.1:57500] client connect
+[09:36:31.623][172.20.0.1:57504] client connect
+[09:36:31.623][172.20.0.1:57506] client connect
+[09:36:31.623][172.20.0.1:57516] client connect
+[09:36:31.623][172.20.0.1:57528] client connect
+[09:36:31.628][172.20.0.1:56992] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.628][172.20.0.1:56944] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.628][172.20.0.1:56954] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.628][172.20.0.1:56938] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.629][172.20.0.1:56986] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.629][172.20.0.1:56952] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.629][172.20.0.1:56996] server connect mtalk.google.com:443 (74.125.68.188:443)
+[09:36:31.629][172.20.0.1:56970] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.629][172.20.0.1:56956] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:36:31.630][172.20.0.1:60328] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.630][172.20.0.1:56908] server disconnect appsgenaiserver-pa.clients6.google.com:443 (142.250.182.106:443)
+[09:36:31.632][172.20.0.1:56922] client disconnect
+[09:36:31.635][172.20.0.1:56938] server disconnect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.636][172.20.0.1:65208] server connect api.anthropic.com:443 (160.79.104.10:443)
+[09:36:31.637][172.20.0.1:57542] client connect
+[09:36:31.637][172.20.0.1:57544] client connect
+[09:36:31.647][172.20.0.1:60328] client disconnect
+[09:36:31.647][172.20.0.1:56908] client disconnect
+[09:36:31.650][172.20.0.1:57024] server connect dns.google:443 (8.8.4.4:443)
+[09:36:31.650][172.20.0.1:57030] server connect accounts.google.com:443 (192.178.211.84:443)
+[09:36:31.651][172.20.0.1:57028] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.652][172.20.0.1:57090] server connect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.655][172.20.0.1:56938] client disconnect
+[09:36:31.656][172.20.0.1:57030] server disconnect accounts.google.com:443 (192.178.211.84:443)
+[09:36:31.656][172.20.0.1:57028] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.657][172.20.0.1:57090] server disconnect docs.google.com:443 (172.217.24.78:443)
+[09:36:31.659][172.20.0.1:57066] server connect web.telegram.org:443 (149.154.167.99:443)
+[09:36:31.661][172.20.0.1:57042] server connect share.coursera.org:443 (13.224.163.126:443)
+[09:36:31.661][172.20.0.1:57082] server connect play.google.com:443 (142.250.193.110:443)
+[09:36:31.662][172.20.0.1:57058] server connect update.googleapis.com:443 (142.250.183.238:443)
+[09:36:31.662][172.20.0.1:57038] server connect www.google.com:443 (142.251.151.119:443)
+[09:36:31.662][172.20.0.1:57096] server connect oauthaccountmanager.googleapis.com:443 (216.239.34.223:443)
+[09:36:31.663][172.20.0.1:57086] server connect fonts.googleapis.com:443 (142.250.183.202:443)

@@ -1,0 +1,4 @@
+$ docker exec warden-proxy sh -c ip link show eth0 2>/dev/null || ifconfig eth0 2>/dev/null
+
+
+[exit=127]

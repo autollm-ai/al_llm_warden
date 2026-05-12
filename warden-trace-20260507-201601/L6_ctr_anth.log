@@ -1,0 +1,23 @@
+$ docker exec warden-proxy sh -c 
+  echo "-- TCP connect --"
+  ( timeout 5 sh -c "echo > /dev/tcp/api.anthropic.com/443" 2>&1 && echo "TCP OK" ) || echo "TCP FAIL"
+  echo "-- TLS handshake --"
+  echo "" | timeout 8 openssl s_client -connect api.anthropic.com:443 -servername api.anthropic.com -brief 2>&1 | head -10
+
+
+-- TCP connect --
+sh: 1: cannot create /dev/tcp/api.anthropic.com/443: Directory nonexistent
+TCP FAIL
+-- TLS handshake --
+Connecting to 160.79.104.10
+depth=0 CN=api.anthropic.com
+verify error:num=20:unable to get local issuer certificate
+depth=0 CN=api.anthropic.com
+verify error:num=21:unable to verify the first certificate
+CONNECTION ESTABLISHED
+Protocol version: TLSv1.3
+Ciphersuite: TLS_AES_256_GCM_SHA384
+Peer certificate: CN=api.anthropic.com
+Hash used: SHA256
+
+[exit=0]

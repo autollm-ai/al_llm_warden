@@ -1,0 +1,15 @@
+-- mitmproxy CA inventory across keychains --
+
+[/Library/Keychains/System.keychain]
+count: 1
+  cert 1:
+    sha256 Fingerprint=98:61:93:60:01:A6:30:71:08:01:28:20:90:C9:30:2A:58:B7:20:98:F3:81:1C:20:F6:DB:64:AA:25:AD:04:DD
+    subject=CN=mitmproxy, O=mitmproxy
+    notBefore=Apr 30 16:28:37 2026 GMT
+    notAfter=Apr 29 16:28:37 2036 GMT
+
+[/Users/apple/Library/Keychains/login.keychain-db]
+count: 0
+
+[/System/Library/Keychains/SystemRootCertificates.keychain]
+count: 0

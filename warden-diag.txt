@@ -1,0 +1,1270 @@
+
+=== date / host / uname ===
+
+Thu May  7 19:02:50 IST 2026
+Darwin APPLE-ka-MacBook-Pro.local 24.3.0 Darwin Kernel Version 24.3.0: Thu Jan  2 20:24:24 PST 2025; root:xnu-11215.81.4~3/RELEASE_ARM64_T6030 arm64
+ProductName:		macOS
+ProductVersion:		15.3.1
+BuildVersion:		24D70
+
+=== system proxy state per network service ===
+
+-- Thunderbolt --
+** Error: Unable to find item in network database.
+** Error: Unable to find item in network database.
+** Error: Unable to find item in network database.
+** Error: The parameters were not valid.
+-- Bridge --
+** Error: Unable to find item in network database.
+** Error: Unable to find item in network database.
+** Error: Unable to find item in network database.
+** Error: The parameters were not valid.
+-- Wi-Fi --
+Enabled: Yes
+Server: 127.0.0.1
+Port: 8080
+Authenticated Proxy Enabled: 0
+Enabled: Yes
+Server: 127.0.0.1
+Port: 8080
+Authenticated Proxy Enabled: 0
+localhost
+127.0.0.1
+*.local
+169.254/16
+Auto Proxy Discovery: Off
+
+=== scutil --proxy ===
+
+<dictionary> {
+  ExceptionsList : <array> {
+    0 : localhost
+    1 : 127.0.0.1
+    2 : *.local
+    3 : 169.254/16
+  }
+  FTPPassive : 1
+  HTTPEnable : 1
+  HTTPPort : 8080
+  HTTPProxy : 127.0.0.1
+  HTTPSEnable : 1
+  HTTPSPort : 8080
+  HTTPSProxy : 127.0.0.1
+}
+
+=== shell env (HTTP_PROXY etc.) + ~/.zshrc warden block ===
+
+HTTP_PROXY=http://127.0.0.1:8080
+HTTPS_PROXY=http://127.0.0.1:8080
+ALL_PROXY=http://127.0.0.1:8080
+NO_PROXY=localhost,127.0.0.1,::1
+REQUESTS_CA_BUNDLE=/Users/apple/.config/warden/warden-ca-bundle.pem
+SSL_CERT_FILE=/Users/apple/.config/warden/warden-ca-bundle.pem
+-- ~/.zshrc warden block --
+# >>> warden proxy >>>
+export HTTP_PROXY=http://127.0.0.1:8080
+export HTTPS_PROXY=http://127.0.0.1:8080
+export ALL_PROXY=http://127.0.0.1:8080
+export NO_PROXY=localhost,127.0.0.1,::1
+export REQUESTS_CA_BUNDLE=/Users/apple/.config/warden/warden-ca-bundle.pem
+export SSL_CERT_FILE=/Users/apple/.config/warden/warden-ca-bundle.pem
+export NODE_EXTRA_CA_CERTS=/Users/apple/.config/warden/warden-ca-bundle.pem
+# <<< warden proxy <<<
+
+=== mitmproxy CAs across keychains (counts + SHA-256) ===
+
+-- /Library/Keychains/System.keychain --
+mitmproxy CA count = 1
+  ca-System.keychain-1.pem:
+    sha256 Fingerprint=98:61:93:60:01:A6:30:71:08:01:28:20:90:C9:30:2A:58:B7:20:98:F3:81:1C:20:F6:DB:64:AA:25:AD:04:DD
+    subject=CN=mitmproxy, O=mitmproxy
+    issuer=CN=mitmproxy, O=mitmproxy
+    notBefore=Apr 30 16:28:37 2026 GMT
+    notAfter=Apr 29 16:28:37 2036 GMT
+-- /Users/apple/Library/Keychains/login.keychain-db --
+mitmproxy CA count = 0
+-- /System/Library/Keychains/SystemRootCertificates.keychain --
+mitmproxy CA count = 0
+
+=== warden trust state of CA cert (SecTrustEvaluate via security verify-cert) ===
+
+bundle = /Users/apple/.config/warden/warden-ca-bundle.pem
+sha256 Fingerprint=04:04:80:28:BF:1F:28:64:D4:8F:9A:D4:D8:32:94:36:6A:82:88:56:55:3F:3B:14:30:3F:90:14:7F:5D:40:EF
+subject=C=ES, CN=Autoridad de Certificacion Firmaprofesional CIF A62634068
+issuer=C=ES, CN=Autoridad de Certificacion Firmaprofesional CIF A62634068
+---
+No extended validation result found
+Certificate Transparency (CT) status: [31mnot verified[0m
+Unable to find at least 2 signed certificate timestamps (SCTs) from approved logs
+
+=== warden container status ===
+
+warden-proxy	Up 10 minutes (healthy)	127.0.0.1:8080->8080/tcp
+warden-api	Up 2 hours (healthy)	127.0.0.1:8090->8090/tcp
+
+=== TCP listeners on host (8080 / 8090) — must bind 127.0.0.1, NOT 0.0.0.0 ===
+
+-- lsof :8080 --
+COMMAND     PID  USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+com.docke 29361 apple  197u  IPv4 0x43c3d942d7a27730      0t0  TCP 127.0.0.1:8080 (LISTEN)
+-- lsof :8090 --
+COMMAND     PID  USER   FD   TYPE             DEVICE SIZE/OFF NODE NAME
+com.docke 29361 apple  180u  IPv4 0x287ac699c7209446      0t0  TCP 127.0.0.1:8090 (LISTEN)
+[note] If you see *:8080 (or 0.0.0.0:8080) instead of 127.0.0.1:8080, off-host clients can use you as an open relay — see project_proxy_port_binding memory.
+
+=== container CA fingerprint (running mitmproxy) ===
+
+sha256 Fingerprint=98:61:93:60:01:A6:30:71:08:01:28:20:90:C9:30:2A:58:B7:20:98:F3:81:1C:20:F6:DB:64:AA:25:AD:04:DD
+subject=CN=mitmproxy, O=mitmproxy
+issuer=CN=mitmproxy, O=mitmproxy
+notBefore=Apr 30 16:28:37 2026 GMT
+notAfter=Apr 29 16:28:37 2036 GMT
+
+=== container env + mitmproxy version ===
+
+Mitmproxy: 10.4.2
+Python:    3.11.15
+OpenSSL:   OpenSSL 3.3.2 3 Sep 2024
+Platform:  Linux-6.12.67-linuxkit-aarch64-with-glibc2.41
+--
+GPG_KEY=A035C8C19219BA821ECEA86B64E628F8D684696D
+HOME=/root
+HOSTNAME=7386efd0e8c9
+LANG=C.UTF-8
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PIP_DISABLE_PIP_VERSION_CHECK=1
+PIP_NO_CACHE_DIR=1
+PWD=/app
+PYTHONDONTWRITEBYTECODE=1
+PYTHONUNBUFFERED=1
+PYTHON_SHA256=272179ddd9a2e41a0fc8e42e33dfbdca0b3711aa5abf372d3f2d51543d09b625
+PYTHON_VERSION=3.11.15
+REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+WARDEN_AUTOTRAIN=1
+WARDEN_DB=/data/warden.db
+WARDEN_FRONTEND_DIR=/app/frontend
+WARDEN_GUARDRAIL_RESPONSES=0
+WARDEN_MODEL_DIR=/models
+WARDEN_TAP_STREAMS=1
+WARDEN_TEST_MODE=0
+WARDEN_TEST_MODE_PATH=/data/warden-test-mode.jsonl
+WARDEN_TRAIN_EPOCHS=4
+WARDEN_TRAIN_SAMPLES=8000
+
+=== mitmproxy startup banner + allow-hosts regex ===
+
+[entrypoint] starting mitmdump on 0.0.0.0:8080  (confdir=/home/mitmproxy/.mitmproxy)
+[entrypoint] allow-hosts regex: ^((?:[a-z0-9-]+\.)*api\-inference\.huggingface\.co|(?:[a-z0-9-]+\.)*api\.anthropic\.com|(?:[a-z0-9-]+\.)*api\.cohere\.ai|(?:[a-z0-9-]+\.)*api\.deepseek\.com|(?:[a-z0-9-]+\.)*api\.fireworks\.ai|(?:[a-z0-9-]+\.)*api\.groq\.com|(?:[a-z0-9-]+\.)*api\.mistral\.ai|(?:[a-z0-9-]+\.)*api\.openai\.com|(?:[a-z0-9-]+\.)*api\.perplexity\.ai|(?:[a-z0-9-]+\.)*api\.replicate\.com|(?:[a-z0-9-]+\.)*api\.together\.xyz|(?:[a-z0-9-]+\.)*api\.x\.ai|(?:[a-z0-9-]+\.)*chat\.openai\.com|(?:[a-z0-9-]+\.)*chatgpt\.com|(?:[a-z0-9-]+\.)*claude\.ai|(?:[a-z0-9-]+\.)*console\.anthropic\.com|(?:[a-z0-9-]+\.)*copilot\.microsoft\.com|(?:[a-z0-9-]+\.)*gemini\.google\.com|(?:[a-z0-9-]+\.)*generativelanguage\.googleapis\.com|(?:[a-z0-9-]+\.)*huggingface\.co|(?:[a-z0-9-]+\.)*openrouter\.ai)(:\d+)?$
+[13:21:57.075] Loading script /app/proxy/addon.py
+[13:21:57.669] Warden addon loaded — db=/data/warden.db tier2=True test_mode=False monitor_responses=True tap_streams=True guardrail_responses=False
+[13:21:57.670] HTTP(S) proxy listening at *:8080.
+[13:31:57.843][172.19.0.1:55296] client connect
+172.19.0.1:55296: GET http://mitm.it/cert/pem
+               << 200 OK 1.1k
+[13:31:57.863][172.19.0.1:55296] client disconnect
+[13:32:07.277][172.19.0.1:64590] client connect
+[13:32:07.386][172.19.0.1:64590] server connect api.openai.com:443 (162.159.140.245:443)
+172.19.0.1:64590: GET https://api.openai.com/v1/models HTTP/2.0
+      << HTTP/2.0 401 Unauthorized 262b
+[13:32:07.848][172.19.0.1:64590] client disconnect
+[13:32:07.848][172.19.0.1:64590] server disconnect api.openai.com:443 (162.159.140.245:443)
+[13:32:08.174][172.19.0.1:64604] client connect
+[13:32:08.230][172.19.0.1:64604] server connect api.openai.com:443 (162.159.140.245:443)
+172.19.0.1:64604: GET https://api.openai.com/v1/models HTTP/2.0
+      << HTTP/2.0 401 Unauthorized 262b
+[13:32:08.587][172.19.0.1:64604] client disconnect
+[13:32:08.587][172.19.0.1:64604] server disconnect api.openai.com:443 (162.159.140.245:443)
+[13:32:09.993][172.19.0.1:64616] client connect
+[13:32:10.045][172.19.0.1:64616] server connect signaler-pa.clients6.google.com:443 (142.250.182.202:443)
+[13:32:13.022][172.19.0.1:64622] client connect
+[13:32:13.026][172.19.0.1:64638] client connect
+[13:32:13.031][172.19.0.1:64640] client connect
+[13:32:13.035][172.19.0.1:64656] client connect
+[13:32:13.060][172.19.0.1:64622] server connect play.google.com:443 (142.250.182.14:443)
+[13:32:13.064][172.19.0.1:64638] server connect browser-intake-us5-datadoghq.com:443 (34.149.66.154:443)
+[13:32:13.065][172.19.0.1:64656] server connect a-api.anthropic.com:443 (160.79.104.10:443)
+
+=== DNS resolution (host) ===
+
+
+--- host: mail.google.com ---
+172.217.26.101
+2404:6800:4002:824::2005
+
+
+
+--- host: api.anthropic.com ---
+160.79.104.10
+2607:6bc0::10
+
+--- host: claude.ai ---
+160.79.104.10
+2607:6bc0::10
+
+=== DNS resolution (inside warden-proxy container) ===
+
+
+--- container: mail.google.com ---
+142.250.193.69  mail.google.com
+
+--- container: api.anthropic.com ---
+160.79.104.10   api.anthropic.com
+
+=== container -> mail.google.com:443 (raw TCP + TLS handshake) ===
+
+-- nc -vz --
+sh: 4: cannot create /dev/tcp/mail.google.com/443: Directory nonexistent
+TCP open failed
+-- openssl s_client (no SNI) --
+Connecting to 142.250.193.69
+
+=== container -> api.anthropic.com:443 (raw TCP + TLS handshake) ===
+
+Connecting to 160.79.104.10
+
+=== PROBE — passthrough host mail.google.com (must show issuer=GTS, NOT mitmproxy) ===
+
+
+--- passthrough-mail  (https://mail.google.com/)  [full log: /Users/apple/Projects/al_llm_warden/warden-diag-raw/passthrough-mail.log] ---
+[curl exit=28]
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+* CONNECT tunnel: HTTP/1.1 negotiated
+> CONNECT mail.google.com:443 HTTP/1.1
+
+=== PROBE — passthrough host www.google.com (sanity vs mail) ===
+
+
+--- passthrough-www  (https://www.google.com/)  [full log: /Users/apple/Projects/al_llm_warden/warden-diag-raw/passthrough-www.log] ---
+[curl exit=28]
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+* CONNECT tunnel: HTTP/1.1 negotiated
+> CONNECT www.google.com:443 HTTP/1.1
+< HTTP/1.1 200 Connection established
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+* (304) (OUT), TLS handshake, Client hello (1):
+
+=== PROBE — MITM host api.anthropic.com (must show issuer=mitmproxy) ===
+
+
+--- mitm-anthropic  (https://api.anthropic.com/)  [full log: /Users/apple/Projects/al_llm_warden/warden-diag-raw/mitm-anthropic.log] ---
+[curl exit=28]
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+* CONNECT tunnel: HTTP/1.1 negotiated
+> CONNECT api.anthropic.com:443 HTTP/1.1
+
+=== PROBE — MITM host claude.ai ===
+
+
+--- mitm-claude  (https://claude.ai/)  [full log: /Users/apple/Projects/al_llm_warden/warden-diag-raw/mitm-claude.log] ---
+[curl exit=77]
+
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+* CONNECT tunnel: HTTP/1.1 negotiated
+> CONNECT claude.ai:443 HTTP/1.1
+
+  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0< HTTP/1.1 200 Connection established
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+* (304) (OUT), TLS handshake, Client hello (1):
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+curl: (77) error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+
+=== PROBE — direct (truly bypass proxy) sanity on mail.google.com ===
+
+
+--- direct-mail (env unset) ---
+[curl exit=77]
+*   Trying 142.250.193.69:443...
+* Connected to mail.google.com (142.250.193.69) port 443
+* (304) (OUT), TLS handshake, Client hello (1):
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+curl: (77) error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+
+=== HTTP/3 / QUIC — UDP 443 reachability + Alt-Svc ===
+
+[note] Chrome prefers HTTP/3 (QUIC over UDP/443) for Gmail. macOS HTTP proxies don't carry UDP, so QUIC traffic to mail.google.com bypasses warden entirely. If UDP/443 is open egress AND Chrome successfully races QUIC, the browser may load most of Gmail outside warden's view; if QUIC is partially broken (e.g. some packets reach, some don't), Gmail can hang/error. Disabling HTTP/3 in chrome://flags often resolves it.
+
+--- UDP 443 to mail.google.com (5s nc -u) ---
+Connection to mail.google.com port 443 [udp/https] succeeded!
+
+--- Alt-Svc header from a passthrough probe ---
+
+--- /usr/bin/curl --http3 attempt (will fail without http3 build, but tells us) ---
+curl: option --http3: the installed libcurl version doesn't support this
+curl: try 'curl --help' or 'curl --manual' for more information
+[exit=2]
+
+=== warden-proxy log: ALL lines mentioning mail.google.com (last 500) ===
+
+[13:32:56.125][172.19.0.1:59295] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.128][172.19.0.1:59849] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.177][172.19.0.1:59947] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.180][172.19.0.1:59935] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.219][172.19.0.1:61247] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.219][172.19.0.1:61269] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.249][172.19.0.1:55215] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.253][172.19.0.1:55219] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.319][172.19.0.1:57923] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.340][172.19.0.1:58801] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.378][172.19.0.1:60213] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.379][172.19.0.1:61363] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.409][172.19.0.1:63035] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.413][172.19.0.1:61391] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.427][172.19.0.1:63928] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.428][172.19.0.1:59380] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.448][172.19.0.1:55520] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.448][172.19.0.1:61828] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.467][172.19.0.1:56013] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.468][172.19.0.1:55591] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.483][172.19.0.1:57077] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.483][172.19.0.1:57313] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.503][172.19.0.1:57927] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.504][172.19.0.1:58131] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.520][172.19.0.1:59259] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.521][172.19.0.1:59679] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.536][172.19.0.1:60129] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.536][172.19.0.1:60359] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.554][172.19.0.1:61191] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.557][172.19.0.1:61253] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.571][172.19.0.1:58864] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.573][172.19.0.1:59101] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.589][172.19.0.1:55793] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.590][172.19.0.1:59376] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.603][172.19.0.1:64180] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.604][172.19.0.1:64286] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.620][172.19.0.1:64490] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.621][172.19.0.1:65271] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.634][172.19.0.1:60867] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.636][172.19.0.1:61843] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.650][172.19.0.1:63543] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.650][172.19.0.1:62869] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.662][172.19.0.1:63949] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.662][172.19.0.1:63925] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.678][172.19.0.1:64473] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.678][172.19.0.1:65031] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.695][172.19.0.1:56487] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.695][172.19.0.1:55881] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.706][172.19.0.1:58569] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.707][172.19.0.1:58687] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.723][172.19.0.1:56057] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.724][172.19.0.1:56055] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.739][172.19.0.1:63465] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.740][172.19.0.1:64875] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.747][172.19.0.1:64875] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.751][172.19.0.1:56055] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.756][172.19.0.1:58569] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.760][172.19.0.1:56487] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.761][172.19.0.1:62311] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.764][172.19.0.1:65031] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.768][172.19.0.1:63925] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.772][172.19.0.1:63543] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.776][172.19.0.1:61843] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.780][172.19.0.1:65271] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.781][172.19.0.1:60030] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.784][172.19.0.1:64286] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.788][172.19.0.1:59376] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.792][172.19.0.1:59101] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.798][172.19.0.1:61253] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.803][172.19.0.1:64756] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.804][172.19.0.1:60359] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.809][172.19.0.1:59679] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.815][172.19.0.1:58131] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.820][172.19.0.1:57313] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.825][172.19.0.1:55591] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.836][172.19.0.1:57610] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.836][172.19.0.1:55520] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.844][172.19.0.1:59380] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.849][172.19.0.1:61391] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.853][172.19.0.1:61363] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.857][172.19.0.1:58801] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.861][172.19.0.1:55219] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.861][172.19.0.1:60212] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.865][172.19.0.1:61247] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.869][172.19.0.1:59935] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.873][172.19.0.1:59849] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.879][172.19.0.1:56395] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.883][172.19.0.1:60732] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.883][172.19.0.1:55175] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.888][172.19.0.1:61823] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.892][172.19.0.1:61337] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.896][172.19.0.1:60375] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.901][172.19.0.1:59689] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.906][172.19.0.1:58903] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.906][172.19.0.1:63610] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.910][172.19.0.1:57695] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.914][172.19.0.1:56515] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.918][172.19.0.1:55967] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.922][172.19.0.1:65231] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.926][172.19.0.1:55520] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.926][172.19.0.1:63889] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.930][172.19.0.1:63523] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.934][172.19.0.1:63023] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.938][172.19.0.1:62293] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.943][172.19.0.1:56882] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.946][172.19.0.1:59380] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.947][172.19.0.1:63472] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.951][172.19.0.1:59940] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.955][172.19.0.1:64819] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.959][172.19.0.1:60971] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.967][172.19.0.1:56882] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.978][172.19.0.1:59961] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:56.991][172.19.0.1:60045] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.004][172.19.0.1:60913] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.013][172.19.0.1:60921] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.028][172.19.0.1:61065] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.038][172.19.0.1:61067] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.051][172.19.0.1:61227] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.060][172.19.0.1:61247] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.073][172.19.0.1:65204] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.081][172.19.0.1:63596] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.088][172.19.0.1:59252] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.092][172.19.0.1:65416] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.102][172.19.0.1:60498] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.106][172.19.0.1:60611] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.117][172.19.0.1:55600] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.119][172.19.0.1:59980] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.130][172.19.0.1:60629] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.137][172.19.0.1:60647] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.160][172.19.0.1:60787] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.167][172.19.0.1:57448] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.174][172.19.0.1:56003] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.180][172.19.0.1:61167] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.184][172.19.0.1:64196] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.197][172.19.0.1:58072] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.200][172.19.0.1:59198] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.298][172.19.0.1:58158] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.298][172.19.0.1:65004] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.312][172.19.0.1:63043] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.312][172.19.0.1:63023] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.324][172.19.0.1:63222] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.325][172.19.0.1:63287] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.335][172.19.0.1:59762] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.337][172.19.0.1:63523] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.345][172.19.0.1:60023] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.345][172.19.0.1:61571] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.353][172.19.0.1:59689] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.354][172.19.0.1:59679] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.363][172.19.0.1:59807] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.364][172.19.0.1:59823] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.375][172.19.0.1:60063] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.375][172.19.0.1:60117] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.388][172.19.0.1:60375] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.388][172.19.0.1:60525] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.397][172.19.0.1:60823] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.398][172.19.0.1:60953] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.406][172.19.0.1:61883] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.406][172.19.0.1:61889] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.415][172.19.0.1:62111] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.417][172.19.0.1:62375] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.425][172.19.0.1:62531] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.436][172.19.0.1:62613] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.443][172.19.0.1:62889] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.449][172.19.0.1:63083] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.455][172.19.0.1:63169] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.458][172.19.0.1:63445] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.466][172.19.0.1:63543] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.467][172.19.0.1:63793] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.475][172.19.0.1:63921] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.477][172.19.0.1:63969] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.487][172.19.0.1:64181] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.489][172.19.0.1:64461] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.501][172.19.0.1:64699] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.503][172.19.0.1:64677] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.510][172.19.0.1:64819] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.511][172.19.0.1:64857] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.519][172.19.0.1:64983] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.519][172.19.0.1:64937] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.528][172.19.0.1:65089] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.528][172.19.0.1:65187] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.537][172.19.0.1:65279] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.538][172.19.0.1:65311] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.544][172.19.0.1:65495] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.545][172.19.0.1:55029] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.555][172.19.0.1:55085] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.556][172.19.0.1:55175] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.563][172.19.0.1:55219] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.563][172.19.0.1:55255] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.572][172.19.0.1:55515] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.572][172.19.0.1:55591] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.580][172.19.0.1:55767] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.580][172.19.0.1:55729] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.589][172.19.0.1:55967] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.590][172.19.0.1:56011] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.598][172.19.0.1:56197] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.599][172.19.0.1:56291] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.608][172.19.0.1:56395] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.611][172.19.0.1:56487] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.617][172.19.0.1:56629] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.619][172.19.0.1:56781] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.627][172.19.0.1:57109] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.627][172.19.0.1:57199] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.635][172.19.0.1:57319] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.635][172.19.0.1:57321] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.645][172.19.0.1:57685] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.645][172.19.0.1:57661] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.656][172.19.0.1:57971] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.656][172.19.0.1:57875] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.666][172.19.0.1:58315] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.666][172.19.0.1:58429] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.687][172.19.0.1:58555] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.687][172.19.0.1:58569] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.701][172.19.0.1:58801] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.702][172.19.0.1:58811] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.710][172.19.0.1:59085] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.715][172.19.0.1:59115] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.721][172.19.0.1:59213] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.722][172.19.0.1:59343] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.731][172.19.0.1:59439] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.733][172.19.0.1:59435] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.744][172.19.0.1:59873] server connect mail.google.com:443 (142.250.193.69:443)
+[13:32:57.746][172.19.0.1:60167] server connect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.316][172.19.0.1:61363] server connect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.322][172.19.0.1:60502] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.342][172.19.0.1:61391] server connect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.347][172.19.0.1:63090] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.363][172.19.0.1:56955] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.391][172.19.0.1:58581] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.407][172.19.0.1:59441] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:21.408][172.19.0.1:56592] server connect mail.google.com:443 (142.250.193.69:443)
+[13:33:24.097][172.19.0.1:60029] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:24.103][172.19.0.1:56616] server connect mail.google.com:443 (142.250.193.69:443)
+[13:33:24.112][172.19.0.1:60543] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.589][172.19.0.1:64090] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.603][172.19.0.1:59961] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.624][172.19.0.1:55046] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.649][172.19.0.1:60913] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.664][172.19.0.1:59197] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.670][172.19.0.1:56738] server connect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.675][172.19.0.1:61065] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.686][172.19.0.1:62541] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.699][172.19.0.1:61227] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.706][172.19.0.1:55721] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.711][172.19.0.1:56790] server connect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.712][172.19.0.1:65204] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.717][172.19.0.1:56301] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.722][172.19.0.1:59252] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.729][172.19.0.1:63485] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.735][172.19.0.1:60498] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.740][172.19.0.1:61499] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.746][172.19.0.1:55600] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.752][172.19.0.1:63455] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.756][172.19.0.1:60629] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.761][172.19.0.1:64415] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.766][172.19.0.1:60787] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.771][172.19.0.1:65011] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.776][172.19.0.1:56003] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.782][172.19.0.1:55441] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.786][172.19.0.1:64196] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.793][172.19.0.1:61023] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.798][172.19.0.1:59198] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.803][172.19.0.1:63565] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.807][172.19.0.1:65004] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.812][172.19.0.1:64079] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.818][172.19.0.1:63043] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.822][172.19.0.1:61845] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.826][172.19.0.1:63222] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.829][172.19.0.1:55559] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.833][172.19.0.1:59762] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.840][172.19.0.1:57801] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.844][172.19.0.1:60023] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.848][172.19.0.1:55180] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.851][172.19.0.1:59679] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.856][172.19.0.1:63270] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.862][172.19.0.1:59823] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.866][172.19.0.1:65372] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.869][172.19.0.1:60063] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.874][172.19.0.1:60096] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.875][172.19.0.1:60375] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.880][172.19.0.1:62568] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.881][172.19.0.1:60823] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.885][172.19.0.1:64895] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.887][172.19.0.1:61883] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.892][172.19.0.1:65277] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.894][172.19.0.1:62111] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.898][172.19.0.1:55497] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.900][172.19.0.1:62531] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.903][172.19.0.1:60282] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.905][172.19.0.1:62889] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.909][172.19.0.1:63012] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.911][172.19.0.1:63169] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.915][172.19.0.1:65370] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.917][172.19.0.1:63543] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.921][172.19.0.1:58758] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.922][172.19.0.1:63921] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.926][172.19.0.1:60924] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.927][172.19.0.1:64181] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.932][172.19.0.1:64411] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.933][172.19.0.1:64677] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.937][172.19.0.1:64791] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.937][172.19.0.1:64857] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.942][172.19.0.1:60785] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.943][172.19.0.1:64983] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.946][172.19.0.1:57834] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.947][172.19.0.1:65089] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.951][172.19.0.1:62654] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.952][172.19.0.1:65279] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.956][172.19.0.1:63243] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.958][172.19.0.1:65495] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.961][172.19.0.1:63493] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.962][172.19.0.1:55085] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.966][172.19.0.1:60398] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.967][172.19.0.1:55219] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.972][172.19.0.1:64095] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.973][172.19.0.1:55515] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.978][172.19.0.1:64797] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.978][172.19.0.1:55729] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.981][172.19.0.1:59734] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.981][172.19.0.1:56011] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.984][172.19.0.1:62309] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.985][172.19.0.1:56291] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.987][172.19.0.1:62567] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.988][172.19.0.1:56487] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.991][172.19.0.1:62014] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.991][172.19.0.1:56781] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.994][172.19.0.1:62263] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.994][172.19.0.1:57199] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.998][172.19.0.1:57321] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:47.998][172.19.0.1:63055] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.000][172.19.0.1:57685] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.001][172.19.0.1:65213] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.003][172.19.0.1:57875] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.004][172.19.0.1:55543] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.007][172.19.0.1:58429] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.008][172.19.0.1:55907] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.010][172.19.0.1:58569] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.011][172.19.0.1:56217] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.013][172.19.0.1:58811] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.014][172.19.0.1:56703] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.016][172.19.0.1:59115] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.018][172.19.0.1:57117] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.019][172.19.0.1:59343] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.020][172.19.0.1:57573] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.021][172.19.0.1:59439] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.022][172.19.0.1:58457] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.023][172.19.0.1:59873] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.024][172.19.0.1:58745] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.025][172.19.0.1:61363] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.027][172.19.0.1:58957] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.027][172.19.0.1:56592] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.029][172.19.0.1:59451] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.029][172.19.0.1:56738] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.031][172.19.0.1:59627] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.032][172.19.0.1:59985] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.034][172.19.0.1:60577] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.036][172.19.0.1:60969] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.037][172.19.0.1:61083] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.039][172.19.0.1:61317] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.040][172.19.0.1:61753] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.042][172.19.0.1:62009] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.043][172.19.0.1:64387] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.045][172.19.0.1:65501] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.046][172.19.0.1:56463] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.047][172.19.0.1:58317] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.048][172.19.0.1:59125] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.048][172.19.0.1:60161] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.049][172.19.0.1:60697] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.050][172.19.0.1:63541] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.051][172.19.0.1:63797] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.052][172.19.0.1:64003] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.052][172.19.0.1:57231] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.053][172.19.0.1:59375] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.054][172.19.0.1:60145] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.055][172.19.0.1:55569] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.056][172.19.0.1:65249] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.056][172.19.0.1:65369] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.057][172.19.0.1:63731] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.058][172.19.0.1:61729] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.059][172.19.0.1:65305] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.059][172.19.0.1:56015] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.060][172.19.0.1:58427] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.061][172.19.0.1:59141] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.062][172.19.0.1:59479] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.062][172.19.0.1:60789] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.063][172.19.0.1:60909] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.064][172.19.0.1:64990] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.064][172.19.0.1:62128] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.065][172.19.0.1:60062] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.066][172.19.0.1:63983] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.066][172.19.0.1:62169] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.067][172.19.0.1:62493] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.068][172.19.0.1:63173] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.068][172.19.0.1:63627] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.069][172.19.0.1:64241] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.069][172.19.0.1:65471] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.070][172.19.0.1:56173] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.070][172.19.0.1:56597] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.071][172.19.0.1:57565] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.071][172.19.0.1:58655] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.071][172.19.0.1:59285] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.072][172.19.0.1:60275] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.072][172.19.0.1:61345] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.073][172.19.0.1:61927] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.073][172.19.0.1:63549] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.073][172.19.0.1:56373] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.074][172.19.0.1:59295] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.074][172.19.0.1:59947] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.075][172.19.0.1:61269] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.076][172.19.0.1:55215] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.076][172.19.0.1:57923] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.077][172.19.0.1:60213] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.077][172.19.0.1:63035] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.078][172.19.0.1:63928] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.079][172.19.0.1:61828] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.080][172.19.0.1:56013] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.080][172.19.0.1:57077] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.081][172.19.0.1:57927] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.081][172.19.0.1:59259] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.082][172.19.0.1:60129] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.082][172.19.0.1:61191] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.083][172.19.0.1:58864] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.084][172.19.0.1:55793] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.085][172.19.0.1:64180] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.085][172.19.0.1:64490] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.086][172.19.0.1:60867] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.086][172.19.0.1:62869] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.087][172.19.0.1:63949] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.087][172.19.0.1:64473] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.088][172.19.0.1:55881] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.088][172.19.0.1:58687] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.089][172.19.0.1:56057] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.089][172.19.0.1:63465] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.090][172.19.0.1:62311] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.090][172.19.0.1:60030] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.091][172.19.0.1:64756] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.091][172.19.0.1:57610] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.092][172.19.0.1:60212] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.092][172.19.0.1:60732] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.093][172.19.0.1:63610] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.093][172.19.0.1:55520] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.094][172.19.0.1:59380] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.095][172.19.0.1:56882] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.095][172.19.0.1:60045] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.096][172.19.0.1:60921] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.096][172.19.0.1:61067] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.097][172.19.0.1:61247] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.097][172.19.0.1:63596] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.098][172.19.0.1:65416] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.099][172.19.0.1:60611] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.099][172.19.0.1:59980] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.100][172.19.0.1:60647] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.100][172.19.0.1:57448] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.101][172.19.0.1:61167] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.103][172.19.0.1:58072] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.103][172.19.0.1:58158] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.104][172.19.0.1:63023] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.105][172.19.0.1:63287] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.105][172.19.0.1:63523] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.106][172.19.0.1:61571] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.107][172.19.0.1:59689] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.107][172.19.0.1:59807] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.108][172.19.0.1:60117] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.108][172.19.0.1:60525] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.109][172.19.0.1:60953] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.109][172.19.0.1:61889] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.110][172.19.0.1:62375] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.110][172.19.0.1:62613] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.112][172.19.0.1:63083] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.112][172.19.0.1:63445] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.113][172.19.0.1:63793] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.114][172.19.0.1:63969] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.115][172.19.0.1:64461] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.115][172.19.0.1:64699] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.116][172.19.0.1:64819] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.116][172.19.0.1:64937] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.117][172.19.0.1:65187] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.117][172.19.0.1:65311] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.118][172.19.0.1:55029] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.118][172.19.0.1:55175] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.119][172.19.0.1:55255] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.119][172.19.0.1:55591] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.120][172.19.0.1:55767] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.120][172.19.0.1:55967] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.120][172.19.0.1:56197] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.121][172.19.0.1:56395] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.121][172.19.0.1:56629] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.122][172.19.0.1:57109] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.123][172.19.0.1:57319] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.123][172.19.0.1:57661] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.124][172.19.0.1:57971] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.125][172.19.0.1:58315] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.126][172.19.0.1:58555] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.127][172.19.0.1:58801] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.127][172.19.0.1:59085] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.128][172.19.0.1:59213] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.128][172.19.0.1:59435] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.129][172.19.0.1:60167] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.130][172.19.0.1:61391] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.130][172.19.0.1:56616] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.130][172.19.0.1:56790] server disconnect mail.google.com:443 (142.250.193.69:443)
+
+=== warden-proxy log: ALL lines mentioning google (excluding mail.google.com) ===
+
+[13:33:47.932][172.19.0.1:56778] server connect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.933][172.19.0.1:62027] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.933][172.19.0.1:60828] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.938][172.19.0.1:62561] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.938][172.19.0.1:60971] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.943][172.19.0.1:62809] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.943][172.19.0.1:61091] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.948][172.19.0.1:63163] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.948][172.19.0.1:61253] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.953][172.19.0.1:63547] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.954][172.19.0.1:60720] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.958][172.19.0.1:63889] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.959][172.19.0.1:61094] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.962][172.19.0.1:64045] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.963][172.19.0.1:62286] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.967][172.19.0.1:64553] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.968][172.19.0.1:62018] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.973][172.19.0.1:64761] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.974][172.19.0.1:60651] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.978][172.19.0.1:64919] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.979][172.19.0.1:64097] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.981][172.19.0.1:65051] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.982][172.19.0.1:61140] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.985][172.19.0.1:65271] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.986][172.19.0.1:58442] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.988][172.19.0.1:65451] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.989][172.19.0.1:58634] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.991][172.19.0.1:55157] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.993][172.19.0.1:62987] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.995][172.19.0.1:55261] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.996][172.19.0.1:63269] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:47.998][172.19.0.1:55631] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:47.999][172.19.0.1:59771] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.001][172.19.0.1:55833] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.002][172.19.0.1:61526] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.004][172.19.0.1:56025] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.005][172.19.0.1:59599] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.008][172.19.0.1:56337] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.009][172.19.0.1:59721] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.011][172.19.0.1:56567] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.012][172.19.0.1:59931] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.015][172.19.0.1:56671] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.015][172.19.0.1:60343] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.018][172.19.0.1:57191] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.018][172.19.0.1:60809] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.020][172.19.0.1:57463] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.021][172.19.0.1:61087] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.022][172.19.0.1:57791] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.023][172.19.0.1:62067] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.024][172.19.0.1:57865] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.025][172.19.0.1:62483] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.026][172.19.0.1:58265] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.027][172.19.0.1:62913] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.028][172.19.0.1:58539] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.029][172.19.0.1:63217] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.030][172.19.0.1:58787] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.031][172.19.0.1:63553] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.031][172.19.0.1:59101] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.032][172.19.0.1:63925] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.033][172.19.0.1:59243] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.034][172.19.0.1:64391] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.034][172.19.0.1:59363] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.035][172.19.0.1:64635] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.036][172.19.0.1:59871] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.037][172.19.0.1:64875] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.038][172.19.0.1:61359] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.038][172.19.0.1:65025] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.039][172.19.0.1:61673] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.040][172.19.0.1:65231] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.041][172.19.0.1:56642] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.042][172.19.0.1:65327] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.043][172.19.0.1:55073] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.044][172.19.0.1:55205] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.045][172.19.0.1:55329] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.046][172.19.0.1:55639] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.047][172.19.0.1:55821] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.048][172.19.0.1:56191] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.048][172.19.0.1:56345] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.049][172.19.0.1:56521] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.050][172.19.0.1:56749] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.051][172.19.0.1:57205] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.052][172.19.0.1:57493] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.053][172.19.0.1:57823] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.054][172.19.0.1:57871] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.055][172.19.0.1:58403] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.055][172.19.0.1:58707] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.056][172.19.0.1:58847] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.057][172.19.0.1:59071] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.058][172.19.0.1:59337] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.059][172.19.0.1:59399] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.060][172.19.0.1:60163] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.061][172.19.0.1:61401] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.062][172.19.0.1:56602] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.062][172.19.0.1:56778] server disconnect optimizationguide-pa.googleapis.com:443 (216.239.36.223:443)
+[13:33:48.126][172.19.0.1:62813] server connect oauthaccountmanager.googleapis.com:443 (216.239.38.223:443)
+[13:33:48.126][172.19.0.1:62813] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.38.223:443)
+[13:33:48.129][172.19.0.1:62341] server connect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.129][172.19.0.1:62341] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:49.160][172.19.0.1:57713] server connect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:49.161][172.19.0.1:57713] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+
+=== warden-proxy log: every error/exception/handshake-failure with 2 lines context ===
+
+67047: << stream reset by client (CANCEL)
+67055: << stream reset by client (CANCEL)
+67062: << stream reset by client (CANCEL)
+67072: << stream reset by client (CANCEL)
+67082: << stream reset by client (CANCEL)
+67091: << stream reset by client (CANCEL)
+67099: << stream reset by client (CANCEL)
+67106: << stream reset by client (CANCEL)
+67112: << stream reset by client (CANCEL)
+67121: << stream reset by client (CANCEL)
+67126: << stream reset by client (CANCEL)
+67136: << stream reset by client (CANCEL)
+67144: << stream reset by client (CANCEL)
+67155: << stream reset by client (CANCEL)
+67160: << stream reset by client (CANCEL)
+67170: << stream reset by client (CANCEL)
+67175: << stream reset by client (CANCEL)
+67183: << stream reset by client (CANCEL)
+67192: << stream reset by client (CANCEL)
+67200: << stream reset by client (CANCEL)
+67206: << stream reset by client (CANCEL)
+67218: << stream reset by client (CANCEL)
+67224: << stream reset by client (CANCEL)
+67232: << stream reset by client (CANCEL)
+67240: << stream reset by client (CANCEL)
+67251: << stream reset by client (CANCEL)
+67261: << stream reset by client (CANCEL)
+67265: << stream reset by client (CANCEL)
+67273: << stream reset by client (CANCEL)
+67282: << stream reset by client (CANCEL)
+67289: << stream reset by client (CANCEL)
+67299: << stream reset by client (CANCEL)
+67308: << stream reset by client (CANCEL)
+67316: << stream reset by client (CANCEL)
+67324: << stream reset by client (CANCEL)
+67332: << stream reset by client (CANCEL)
+67339: << stream reset by client (CANCEL)
+67345: << stream reset by client (CANCEL)
+67353: << stream reset by client (CANCEL)
+67361: << stream reset by client (CANCEL)
+67367: << stream reset by client (CANCEL)
+68270:[13:32:55.486][172.19.0.1:56015] Server TLS handshake failed. connection closed
+69805:[13:32:56.731][172.19.0.1:62311] Server TLS handshake failed. connection closed
+71569: << stream reset by client (CANCEL)
+71633:[13:33:47.627][172.19.0.1:56544] Server TLS handshake failed. connection closed
+71635:[13:33:47.627][172.19.0.1:56566] Server TLS handshake failed. connection closed
+71637:[13:33:47.627][172.19.0.1:56582] Server TLS handshake failed. connection closed
+71664: << stream reset by client (CANCEL)
+71739: << stream reset by client (CANCEL)
+71766: << stream reset by client (CANCEL)
+71768: << stream reset by client (INTERNAL_ERROR)
+71784: << stream reset by client (INTERNAL_ERROR)
+71791: << stream reset by client (CANCEL)
+71793: << stream reset by client (INTERNAL_ERROR)
+71812: << stream reset by client (CANCEL)
+71813:[13:33:47.700][172.19.0.1:60446] Client TLS handshake failed. The client disconnected during the handshake. If this happens consistently for api.anthropic.com, this may indicate that the client does not trust the proxy's certificate.
+71814:[13:33:47.700][172.19.0.1:60448] Client TLS handshake failed. The client disconnected during the handshake. If this happens consistently for api.anthropic.com, this may indicate that the client does not trust the proxy's certificate.
+71815:[13:33:47.700][172.19.0.1:60464] Client TLS handshake failed. The client disconnected during the handshake. If this happens consistently for api.anthropic.com, this may indicate that the client does not trust the proxy's certificate.
+71822: << stream reset by client (INTERNAL_ERROR)
+71824:[13:33:47.706][172.19.0.1:60468] Client TLS handshake failed. The client disconnected during the handshake. If this happens consistently for api.anthropic.com, this may indicate that the client does not trust the proxy's certificate.
+71837: << stream reset by client (CANCEL)
+71844: << stream reset by client (INTERNAL_ERROR)
+71856: << stream reset by client (CANCEL)
+71859: << stream reset by client (INTERNAL_ERROR)
+71870: << stream reset by client (CANCEL)
+71881: << stream reset by client (INTERNAL_ERROR)
+71887: << stream reset by client (CANCEL)
+71898: << stream reset by client (INTERNAL_ERROR)
+71908: << stream reset by client (CANCEL)
+71916: << stream reset by client (INTERNAL_ERROR)
+71925: << stream reset by client (CANCEL)
+71934: << stream reset by client (INTERNAL_ERROR)
+71939: << stream reset by client (CANCEL)
+71945: << stream reset by client (INTERNAL_ERROR)
+71956: << stream reset by client (CANCEL)
+71959: << stream reset by client (INTERNAL_ERROR)
+71967: << stream reset by client (CANCEL)
+71974: << stream reset by client (INTERNAL_ERROR)
+71981: << stream reset by client (CANCEL)
+71990: << stream reset by client (INTERNAL_ERROR)
+71997: << stream reset by client (CANCEL)
+72002: << stream reset by client (INTERNAL_ERROR)
+72010: << stream reset by client (CANCEL)
+72018: << stream reset by client (INTERNAL_ERROR)
+72026: << stream reset by client (CANCEL)
+72034: << stream reset by client (INTERNAL_ERROR)
+72037: << stream reset by client (CANCEL)
+72047: << stream reset by client (INTERNAL_ERROR)
+72056: << stream reset by client (CANCEL)
+72063: << stream reset by client (INTERNAL_ERROR)
+72068: << stream reset by client (CANCEL)
+72076: << stream reset by client (INTERNAL_ERROR)
+72077:[13:33:47.816][172.19.0.1:60478] error establishing server connection: [Errno 111] Connect call failed ('127.0.0.1', 49831)
+72088:[13:33:47.822][172.19.0.1:60476] Client TLS handshake failed. The client disconnected during the handshake. If this happens consistently for api.anthropic.com, this may indicate that the client does not trust the proxy's certificate.
+72091: << stream reset by client (INTERNAL_ERROR)
+72104: << stream reset by client (INTERNAL_ERROR)
+72120: << stream reset by client (INTERNAL_ERROR)
+72130: << stream reset by client (INTERNAL_ERROR)
+72174:[13:33:47.863][172.19.0.1:60490] Client TLS handshake failed. The client disconnected during the handshake. If this happens consistently for api.anthropic.com, this may indicate that the client does not trust the proxy's certificate.
+72478: << stream reset by client (INTERNAL_ERROR)
+72487: << stream reset by client (INTERNAL_ERROR)
+72497: << stream reset by client (INTERNAL_ERROR)
+72510: << stream reset by client (INTERNAL_ERROR)
+72520: << stream reset by client (INTERNAL_ERROR)
+72529: << stream reset by client (INTERNAL_ERROR)
+72543: << stream reset by client (INTERNAL_ERROR)
+72553: << stream reset by client (INTERNAL_ERROR)
+72567: << stream reset by client (INTERNAL_ERROR)
+72577: << stream reset by client (INTERNAL_ERROR)
+72587: << stream reset by client (INTERNAL_ERROR)
+72599: << stream reset by client (INTERNAL_ERROR)
+72607: << stream reset by client (INTERNAL_ERROR)
+72618: << stream reset by client (INTERNAL_ERROR)
+72628: << stream reset by client (INTERNAL_ERROR)
+72639: << stream reset by client (INTERNAL_ERROR)
+72649: << stream reset by client (INTERNAL_ERROR)
+72660: << stream reset by client (INTERNAL_ERROR)
+72670: << stream reset by client (INTERNAL_ERROR)
+72678: << stream reset by client (INTERNAL_ERROR)
+72689: << stream reset by client (INTERNAL_ERROR)
+
+=== warden-proxy log: addon row events (skipped/inserted) for last 200 flows ===
+
+[13:21:57.075] Loading script /app/proxy/addon.py
+[13:21:57.669] Warden addon loaded — db=/data/warden.db tier2=True test_mode=False monitor_responses=True tap_streams=True guardrail_responses=False
+
+=== warden-proxy stderr (full last 200 lines) ===
+
+[13:33:48.078][172.19.0.1:63035] client disconnect
+[13:33:48.078][172.19.0.1:63928] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.078][172.19.0.1:63928] client disconnect
+[13:33:48.079][172.19.0.1:61828] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.079][172.19.0.1:61828] client disconnect
+[13:33:48.080][172.19.0.1:56013] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.080][172.19.0.1:56013] client disconnect
+[13:33:48.080][172.19.0.1:57077] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.081][172.19.0.1:57077] client disconnect
+[13:33:48.081][172.19.0.1:57927] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.081][172.19.0.1:57927] client disconnect
+[13:33:48.081][172.19.0.1:59259] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.082][172.19.0.1:59259] client disconnect
+[13:33:48.082][172.19.0.1:60129] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.082][172.19.0.1:60129] client disconnect
+[13:33:48.082][172.19.0.1:61191] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.083][172.19.0.1:61191] client disconnect
+[13:33:48.083][172.19.0.1:58864] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.083][172.19.0.1:58864] client disconnect
+[13:33:48.084][172.19.0.1:55793] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.084][172.19.0.1:55793] client disconnect
+[13:33:48.085][172.19.0.1:64180] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.085][172.19.0.1:64180] client disconnect
+[13:33:48.085][172.19.0.1:64490] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.085][172.19.0.1:64490] client disconnect
+[13:33:48.086][172.19.0.1:60867] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.086][172.19.0.1:60867] client disconnect
+[13:33:48.086][172.19.0.1:62869] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.086][172.19.0.1:62869] client disconnect
+[13:33:48.087][172.19.0.1:63949] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.087][172.19.0.1:63949] client disconnect
+[13:33:48.087][172.19.0.1:64473] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.087][172.19.0.1:64473] client disconnect
+[13:33:48.088][172.19.0.1:55881] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.088][172.19.0.1:55881] client disconnect
+[13:33:48.088][172.19.0.1:58687] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.088][172.19.0.1:58687] client disconnect
+[13:33:48.089][172.19.0.1:56057] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.089][172.19.0.1:56057] client disconnect
+[13:33:48.089][172.19.0.1:63465] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.089][172.19.0.1:63465] client disconnect
+[13:33:48.090][172.19.0.1:62311] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.090][172.19.0.1:62311] client disconnect
+[13:33:48.090][172.19.0.1:60030] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.090][172.19.0.1:60030] client disconnect
+[13:33:48.091][172.19.0.1:64756] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.091][172.19.0.1:64756] client disconnect
+[13:33:48.091][172.19.0.1:57610] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.091][172.19.0.1:57610] client disconnect
+[13:33:48.092][172.19.0.1:60212] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.092][172.19.0.1:60212] client disconnect
+[13:33:48.092][172.19.0.1:60732] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.092][172.19.0.1:60732] client disconnect
+[13:33:48.093][172.19.0.1:63610] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.093][172.19.0.1:63610] client disconnect
+[13:33:48.093][172.19.0.1:55520] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.093][172.19.0.1:55520] client disconnect
+[13:33:48.094][172.19.0.1:59380] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.094][172.19.0.1:59380] client disconnect
+[13:33:48.095][172.19.0.1:56882] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.095][172.19.0.1:56882] client disconnect
+[13:33:48.095][172.19.0.1:60045] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.095][172.19.0.1:60045] client disconnect
+[13:33:48.096][172.19.0.1:60921] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.096][172.19.0.1:60921] client disconnect
+[13:33:48.096][172.19.0.1:61067] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.096][172.19.0.1:61067] client disconnect
+[13:33:48.097][172.19.0.1:61247] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.097][172.19.0.1:61247] client disconnect
+[13:33:48.097][172.19.0.1:63596] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.097][172.19.0.1:63596] client disconnect
+[13:33:48.098][172.19.0.1:65416] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.098][172.19.0.1:65416] client disconnect
+[13:33:48.099][172.19.0.1:60611] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.099][172.19.0.1:60611] client disconnect
+[13:33:48.099][172.19.0.1:59980] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.100][172.19.0.1:59980] client disconnect
+[13:33:48.100][172.19.0.1:60647] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.100][172.19.0.1:60647] client disconnect
+[13:33:48.100][172.19.0.1:57448] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.101][172.19.0.1:57448] client disconnect
+[13:33:48.101][172.19.0.1:61167] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.101][172.19.0.1:61167] client disconnect
+[13:33:48.103][172.19.0.1:58072] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.103][172.19.0.1:58072] client disconnect
+[13:33:48.103][172.19.0.1:58158] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.104][172.19.0.1:58158] client disconnect
+[13:33:48.104][172.19.0.1:63023] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.104][172.19.0.1:63023] client disconnect
+[13:33:48.105][172.19.0.1:63287] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.105][172.19.0.1:63287] client disconnect
+[13:33:48.105][172.19.0.1:63523] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.105][172.19.0.1:63523] client disconnect
+[13:33:48.106][172.19.0.1:61571] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.106][172.19.0.1:61571] client disconnect
+[13:33:48.107][172.19.0.1:59689] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.107][172.19.0.1:59689] client disconnect
+[13:33:48.107][172.19.0.1:59807] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.108][172.19.0.1:59807] client disconnect
+[13:33:48.108][172.19.0.1:60117] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.108][172.19.0.1:60117] client disconnect
+[13:33:48.108][172.19.0.1:60525] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.109][172.19.0.1:60525] client disconnect
+[13:33:48.109][172.19.0.1:60953] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.109][172.19.0.1:60953] client disconnect
+[13:33:48.109][172.19.0.1:61889] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.110][172.19.0.1:61889] client disconnect
+[13:33:48.110][172.19.0.1:62375] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.110][172.19.0.1:62375] client disconnect
+[13:33:48.110][172.19.0.1:62613] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.111][172.19.0.1:62613] client disconnect
+[13:33:48.112][172.19.0.1:63083] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.112][172.19.0.1:63083] client disconnect
+[13:33:48.112][172.19.0.1:63445] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.112][172.19.0.1:63445] client disconnect
+[13:33:48.113][172.19.0.1:63793] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.113][172.19.0.1:63793] client disconnect
+[13:33:48.114][172.19.0.1:63969] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.114][172.19.0.1:63969] client disconnect
+[13:33:48.115][172.19.0.1:64461] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.115][172.19.0.1:64461] client disconnect
+[13:33:48.115][172.19.0.1:64699] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.116][172.19.0.1:64699] client disconnect
+[13:33:48.116][172.19.0.1:64819] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.116][172.19.0.1:64819] client disconnect
+[13:33:48.116][172.19.0.1:64937] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.117][172.19.0.1:64937] client disconnect
+[13:33:48.117][172.19.0.1:65187] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.117][172.19.0.1:65187] client disconnect
+[13:33:48.117][172.19.0.1:65311] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.117][172.19.0.1:65311] client disconnect
+[13:33:48.118][172.19.0.1:55029] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.118][172.19.0.1:55029] client disconnect
+[13:33:48.118][172.19.0.1:55175] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.118][172.19.0.1:55175] client disconnect
+[13:33:48.119][172.19.0.1:55255] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.119][172.19.0.1:55255] client disconnect
+[13:33:48.119][172.19.0.1:55591] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.119][172.19.0.1:55591] client disconnect
+[13:33:48.120][172.19.0.1:55767] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.120][172.19.0.1:55767] client disconnect
+[13:33:48.120][172.19.0.1:55967] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.120][172.19.0.1:55967] client disconnect
+[13:33:48.120][172.19.0.1:56197] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.121][172.19.0.1:56197] client disconnect
+[13:33:48.121][172.19.0.1:56395] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.121][172.19.0.1:56395] client disconnect
+[13:33:48.121][172.19.0.1:56629] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.121][172.19.0.1:56629] client disconnect
+[13:33:48.122][172.19.0.1:57109] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.122][172.19.0.1:57109] client disconnect
+[13:33:48.123][172.19.0.1:57319] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.123][172.19.0.1:57319] client disconnect
+[13:33:48.123][172.19.0.1:57661] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.123][172.19.0.1:57661] client disconnect
+[13:33:48.124][172.19.0.1:57971] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.124][172.19.0.1:57971] client disconnect
+[13:33:48.125][172.19.0.1:58315] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.125][172.19.0.1:58315] client disconnect
+[13:33:48.126][172.19.0.1:58555] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.126][172.19.0.1:58555] client disconnect
+[13:33:48.126][172.19.0.1:62813] server connect oauthaccountmanager.googleapis.com:443 (216.239.38.223:443)
+[13:33:48.126][172.19.0.1:62813] server disconnect oauthaccountmanager.googleapis.com:443 (216.239.38.223:443)
+[13:33:48.127][172.19.0.1:58801] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.127][172.19.0.1:62813] client disconnect
+[13:33:48.127][172.19.0.1:58801] client disconnect
+[13:33:48.127][172.19.0.1:59085] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.127][172.19.0.1:59085] client disconnect
+[13:33:48.128][172.19.0.1:59213] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.128][172.19.0.1:59213] client disconnect
+[13:33:48.128][172.19.0.1:59435] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.128][172.19.0.1:59435] client disconnect
+[13:33:48.129][172.19.0.1:62341] server connect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.129][172.19.0.1:62341] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:48.129][172.19.0.1:60167] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.129][172.19.0.1:62341] client disconnect
+[13:33:48.129][172.19.0.1:60167] client disconnect
+[13:33:48.130][172.19.0.1:61391] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.130][172.19.0.1:61391] client disconnect
+[13:33:48.130][172.19.0.1:56616] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.130][172.19.0.1:56616] client disconnect
+[13:33:48.130][172.19.0.1:56790] server disconnect mail.google.com:443 (142.250.193.69:443)
+[13:33:48.130][172.19.0.1:56790] client disconnect
+[13:33:48.355][172.19.0.1:60203] server disconnect api.anthropic.com:443 (160.79.104.10:443)
+172.19.0.1:60203: POST https://api.anthropic.com/v1/messages?beta=true
+ << Client disconnected.
+[13:33:48.356][172.19.0.1:60506] server disconnect http-intake.logs.us5.datadoghq.com:443 (34.149.66.137:443)
+[13:33:48.357][172.19.0.1:60203] client disconnect
+[13:33:48.358][172.19.0.1:60506] client disconnect
+[13:33:48.359][172.19.0.1:56630] server disconnect api.anthropic.com:443 (160.79.104.10:443)
+172.19.0.1:56630: POST https://api.anthropic.com/v1/messages?beta=true
+ << Client disconnected.
+[13:33:48.360][172.19.0.1:56630] client disconnect
+[13:33:48.614][172.19.0.1:56724] server connect bam.nr-data.net:443 (162.247.241.14:443)
+[13:33:48.614][172.19.0.1:56710] server connect bam.nr-data.net:443 (162.247.241.14:443)
+[13:33:48.615][172.19.0.1:56724] server disconnect bam.nr-data.net:443 (162.247.241.14:443)
+[13:33:48.616][172.19.0.1:56724] client disconnect
+[13:33:49.160][172.19.0.1:57713] server connect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:49.161][172.19.0.1:57713] server disconnect update.googleapis.com:443 (142.251.43.110:443)
+[13:33:49.162][172.19.0.1:57713] client disconnect
+
+=== browser hints — what to capture next if this still doesn't explain it ===
+
+If the probes above all look healthy but Chrome still fails on Gmail:
+
+  1. Open chrome://net-export, click "Start Logging to Disk", reproduce the
+     Gmail failure, stop logging, and share the .json. We can replay it in
+     https://netlog-viewer.appspot.com/ to see the exact failure code.
+
+  2. In chrome://flags, search "QUIC" — set "Experimental QUIC protocol" to
+     Disabled, restart Chrome, retry. If it now works, the issue is HTTP/3
+     racing past warden over UDP.
+
+  3. chrome://net-internals/#hsts — look up domain "mail.google.com". If
+     "static_sts_domain" / "static_pkp_domain" appears, that confirms HSTS
+     pinning is in play; with pure CONNECT passthrough this is fine, but if
+     anything in the chain is replacing the cert it will be silently rejected.
+
+  4. chrome://policy — confirm there isn't a managed proxy policy overriding
+     the system proxy.
+
+Wrote /Users/apple/Projects/al_llm_warden/warden-diag.txt
+Raw curl/openssl logs in /Users/apple/Projects/al_llm_warden/warden-diag-raw/

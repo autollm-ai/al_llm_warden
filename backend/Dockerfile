@@ -9,7 +9,9 @@ ENV PYTHONUNBUFFERED=1 \
     WARDEN_FRONTEND_DIR=/app/frontend
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl ca-certificates tini \
+ && apt-get install -y --no-install-recommends \
+        curl ca-certificates tini \
+        tcpdump iproute2 procps lsof dnsutils \
  && update-ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 

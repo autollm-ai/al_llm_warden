@@ -104,6 +104,19 @@ else
   warn "No mitmproxy CA found in System keychain (already clean)."
 fi
 
+# Symmetric to install: kick trustd so cached "this CA is trusted"
+# decisions are dropped immediately. Without this, an already-running
+# Chrome/Safari can keep using the in-memory trusted state for an
+# already-removed cert, which is confusing both for re-installs (the
+# next install starts from a stale baseline) and for sensitive sites
+# (a removed-but-still-honored CA is a security smell). Linux has no
+# equivalent — this is macOS-only.
+if [ "$removed" -gt 0 ]; then
+  step "Refreshing macOS trust daemon (so the removal takes effect)"
+  sudo killall -HUP trustd 2>/dev/null || true
+  ok "Trust daemon refreshed"
+fi
+
 # ── Strip the warden proxy block from shell rc files ──────────────────────
 # SAFETY: fall back to a sed-based stripper if python3 isn't present
 # (some macOS users on a clean install don't have it). Also verify the
@@ -251,7 +264,7 @@ cat <<EOF
      a new one):
 
       unset HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \\
-            REQUESTS_CA_BUNDLE SSL_CERT_FILE \\
+            REQUESTS_CA_BUNDLE SSL_CERT_FILE NODE_EXTRA_CA_CERTS \\
             http_proxy https_proxy all_proxy no_proxy
 
   To start fresh:  bash scripts/install-mac.sh

@@ -1,0 +1,68 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0*   Trying 127.0.0.1:8080...
+* Connected to 127.0.0.1 (127.0.0.1) port 8080
+* CONNECT tunnel: HTTP/1.1 negotiated
+* allocate connect buffer
+* Establish HTTP proxy tunnel to api.anthropic.com:443
+> CONNECT api.anthropic.com:443 HTTP/1.1
+> Host: api.anthropic.com:443
+> User-Agent: curl/8.7.1
+> Proxy-Connection: Keep-Alive
+> 
+< HTTP/1.1 200 Connection established
+< 
+* CONNECT phase completed
+* CONNECT tunnel established, response 200
+* ALPN: curl offers h2,http/1.1
+* (304) (OUT), TLS handshake, Client hello (1):
+} [322 bytes data]
+*  CAfile: /etc/ssl/cert.pem
+*  CApath: none
+* (304) (IN), TLS handshake, Server hello (2):
+{ [122 bytes data]
+* (304) (IN), TLS handshake, Unknown (8):
+{ [15 bytes data]
+* (304) (IN), TLS handshake, Certificate (11):
+{ [825 bytes data]
+* (304) (IN), TLS handshake, CERT verify (15):
+{ [264 bytes data]
+* (304) (IN), TLS handshake, Finished (20):
+{ [52 bytes data]
+* (304) (OUT), TLS handshake, Finished (20):
+} [52 bytes data]
+* SSL connection using TLSv1.3 / AEAD-AES256-GCM-SHA384 / [blank] / UNDEF
+* ALPN: server accepted h2
+* Server certificate:
+*  subject: CN=api.anthropic.com
+*  start date: May  6 09:25:51 2026 GMT
+*  expire date: May  8 09:25:51 2027 GMT
+*  subjectAltName: host "api.anthropic.com" matched cert's "api.anthropic.com"
+*  issuer: CN=mitmproxy; O=mitmproxy
+*  SSL certificate verify ok.
+* using HTTP/2
+* [HTTP/2] [1] OPENED stream for https://api.anthropic.com/v1/models
+* [HTTP/2] [1] [:method: GET]
+* [HTTP/2] [1] [:scheme: https]
+* [HTTP/2] [1] [:authority: api.anthropic.com]
+* [HTTP/2] [1] [:path: /v1/models]
+* [HTTP/2] [1] [user-agent: curl/8.7.1]
+* [HTTP/2] [1] [accept: */*]
+> GET /v1/models HTTP/2
+> Host: api.anthropic.com
+> User-Agent: curl/8.7.1
+> Accept: */*
+> 
+* Request completely sent off
+  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:05 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:06 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:07 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:08 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:09 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:11 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:12 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:13 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:14 --:--:--     0* Operation timed out after 15001 milliseconds with 0 bytes received
+  0     0    0     0    0     0      0      0 --:--:--  0:00:15 --:--:--     0
+* Connection #0 to host 127.0.0.1 left intact
+curl: (28) Operation timed out after 15001 milliseconds with 0 bytes received
+
+HTTP_CODE=000
+TIME=15.001840
+DNS=0.001186
+CONNECT=0.001360
+APPCONNECT=0.090250
+PRETRANSFER=0.090368
+STARTTRANSFER=0.000000

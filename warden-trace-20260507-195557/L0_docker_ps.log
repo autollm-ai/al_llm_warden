@@ -1,0 +1,6 @@
+$ docker ps --format {{.Names}}\t{{.Status}}\t{{.Ports}}
+
+warden-api	Up 22 minutes (healthy)	127.0.0.1:8090->8090/tcp
+warden-proxy	Up 22 minutes (healthy)	127.0.0.1:8080->8080/tcp
+
+[exit=0]

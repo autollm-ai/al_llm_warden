@@ -1,0 +1,8 @@
+[15:22:03] ▶ snapshot host state
+[15:22:03] ▶ restart warden-proxy with WARDEN_DEEP_TRACE=1
+ Container warden-proxy Running 
+[15:22:04]   proxy healthy after 1s
+ Container warden-proxy Restarting 
+ Container warden-proxy Started 
+[15:22:09] ▶ start host tcpdump (lo0 + en0)
+[15:22:11] ▶ run probes concurrently

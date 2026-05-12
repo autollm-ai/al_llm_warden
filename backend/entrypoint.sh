@@ -44,6 +44,48 @@ hosts = sorted(set(SHADOW_AI_DOMAINS.keys()))
 parts = [r'(?:[a-z0-9-]+\.)*' + re.escape(h) for h in hosts]
 print(r'^(' + '|'.join(parts) + r')(:\d+)?$')
 ")
+    # Deep-trace mode: when WARDEN_DEEP_TRACE=1 the entrypoint also
+    #   • starts a background tcpdump on eth0 → /data/warden-cap.pcap
+    #     (rotated, 5×50MB, all 443/80/8080 traffic)
+    #   • loads /app/proxy/debug_addon.py as a SECOND addon — every TLS,
+    #     HTTP and connection-lifecycle event lands as a JSON line in
+    #     /data/warden-deep-trace.jsonl
+    #   • bumps mitmdump verbosity to debug + flow_detail=4 for the
+    #     full "what mitmproxy thinks happened" picture in `docker logs`.
+    # Off in production, on when scripts/warden-deep-trace.sh requests it.
+    DEBUG_FLAGS=()
+    if [ "${WARDEN_DEEP_TRACE:-0}" = "1" ]; then
+      echo "[entrypoint] WARDEN_DEEP_TRACE=1 → enabling debug addon + tcpdump + verbose mitmdump"
+      DEBUG_FLAGS+=(
+        -s /app/proxy/debug_addon.py
+        --set termlog_verbosity=debug
+        --set flow_detail=4
+      )
+      # Background pcap. 5 × 50MB rotation = 250MB cap; container restart
+      # clears /data is the named-volume so a fresh pcap on each boot.
+      ( tcpdump -i eth0 -nn -s 0 -W 5 -C 50 \
+          -w /data/warden-cap.pcap \
+          'port 443 or port 80 or port 8080' \
+          >>/data/warden-tcpdump.log 2>&1 ) &
+      echo "[entrypoint] tcpdump pid=$! → /data/warden-cap.pcap"
+      # Periodic socket / FD snapshot every 5s — catches pool exhaustion.
+      ( while true; do
+          { echo "===== $(date -u +%FT%TZ) ====="
+            echo "-- ss -tan --"
+            ss -tan 2>/dev/null | head -200
+            echo "-- ss summary --"
+            ss -s 2>/dev/null
+            echo "-- mitmdump fd count --"
+            pid=$(pgrep -f mitmdump | head -1)
+            if [ -n "$pid" ]; then
+              ls /proc/$pid/fd 2>/dev/null | wc -l
+            fi
+          } >>/data/warden-sockets.log 2>&1
+          sleep 5
+        done ) &
+      echo "[entrypoint] socket snapshotter pid=$!"
+    fi
+
     echo "[entrypoint] starting mitmdump on 0.0.0.0:8080  (confdir=$MITM_CONFDIR)"
     echo "[entrypoint] allow-hosts regex: $ALLOW_HOSTS"
     # --ssl-insecure: skip *upstream* cert verification (mitmdump → server).
@@ -63,6 +105,7 @@ print(r'^(' + '|'.join(parts) + r')(:\d+)?$')
     #   Only MITM LLM domains. Pass everything else through as plain CONNECT.
     exec mitmdump \
       -s /app/proxy/addon.py \
+      "${DEBUG_FLAGS[@]}" \
       --listen-host 0.0.0.0 \
       --listen-port 8080 \
       --set "confdir=$MITM_CONFDIR" \

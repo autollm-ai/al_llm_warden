@@ -1,0 +1,65 @@
+[
+    {
+        "Name": "al_llm_warden_warden-net",
+        "Id": "7400076081fca86b83319fbcce320b1f9272f30684d30bffa60188ccb8e1c2b5",
+        "Created": "2026-05-07T14:35:16.76004055Z",
+        "Scope": "local",
+        "Driver": "bridge",
+        "EnableIPv4": true,
+        "EnableIPv6": false,
+        "IPAM": {
+            "Driver": "default",
+            "Options": null,
+            "Config": [
+                {
+                    "Subnet": "172.20.0.0/16",
+                    "Gateway": "172.20.0.1"
+                }
+            ]
+        },
+        "Internal": false,
+        "Attachable": false,
+        "Ingress": false,
+        "ConfigFrom": {
+            "Network": ""
+        },
+        "ConfigOnly": false,
+        "Options": {
+            "com.docker.network.driver.mtu": "1280",
+            "com.docker.network.enable_ipv4": "true",
+            "com.docker.network.enable_ipv6": "false"
+        },
+        "Labels": {
+            "com.docker.compose.config-hash": "e7af2de2e56f0671a50d8086124b05ee0039037c21019f1a90cb2727fbe5b28d",
+            "com.docker.compose.network": "warden-net",
+            "com.docker.compose.project": "al_llm_warden",
+            "com.docker.compose.version": "5.0.2"
+        },
+        "Containers": {
+            "74aad376a0afde02cf2074d94b09735c61f602aa3941ae0f035aaf5ba9091af7": {
+                "Name": "warden-proxy",
+                "EndpointID": "3620e21c9058d3b1e2fcf82efa513c887711577d5392d93cabb26bc6bb96595f",
+                "MacAddress": "4a:52:09:05:18:46",
+                "IPv4Address": "172.20.0.2/16",
+                "IPv6Address": ""
+            },
+            "856dac383f171174178fd41dac7823993254b04fa0b8774cae96d925ebcf56fb": {
+                "Name": "warden-api",
+                "EndpointID": "dd7521e280f484fce9a77ffb84d8438f737a9e0f447ff8b1b89a5cac264c2fe5",
+                "MacAddress": "6e:9c:de:33:6f:79",
+                "IPv4Address": "172.20.0.3/16",
+                "IPv6Address": ""
+            }
+        },
+        "Status": {
+            "IPAM": {
+                "Subnets": {
+                    "172.20.0.0/16": {
+                        "IPsInUse": 5,
+                        "DynamicIPsAvailable": 65531
+                    }
+                }
+            }
+        }
+    }
+]

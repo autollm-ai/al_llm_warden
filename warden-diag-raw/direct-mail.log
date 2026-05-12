@@ -1,0 +1,16 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0* Host mail.google.com:443 was resolved.
+* IPv6: (none)
+* IPv4: 142.250.193.69
+*   Trying 142.250.193.69:443...
+* Connected to mail.google.com (142.250.193.69) port 443
+* ALPN: curl offers h2,http/1.1
+* (304) (OUT), TLS handshake, Client hello (1):
+} [320 bytes data]
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+* Closing connection
+* error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
+curl: (77) error setting certificate verify locations:  CAfile: /Users/apple/.config/warden/warden-ca-bundle.pem CApath: none
