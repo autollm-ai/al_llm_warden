@@ -249,21 +249,48 @@ class Classifier:
             from .features import feature_vec
             from .bpe import PAD_ID
 
-            ids, _offsets, surfaces = self.tokenizer.encode_with_offsets(
-                text, max_len=lstm.MAX_LEN
-            )
-            chars = [chars_to_ids(s, MAX_CHARS) for s in surfaces]
-            feats = [feature_vec(s) for s in surfaces]
-            mask = [int(i != PAD_ID) for i in ids]
-            if sum(mask) == 0:
+            max_len = lstm.MAX_LEN
+            stride  = lstm.WINDOW_STRIDE
+
+            # Encode the full text without truncation.
+            ids, _offsets, surfaces = self.tokenizer.encode_with_offsets(text)
+            if not ids:
                 return 0.0
-            ids_t   = torch.tensor([ids],   dtype=torch.long,    device=self.device)
-            chars_t = torch.tensor([chars], dtype=torch.long,    device=self.device)
-            feats_t = torch.tensor([feats], dtype=torch.float32, device=self.device)
-            mask_t  = torch.tensor([mask],  dtype=torch.bool,    device=self.device)
+
+            # Slice into overlapping windows of max_len tokens. For short texts
+            # this produces exactly one window — same cost as before.
+            win_ids: list[list[int]] = []
+            win_sur: list[list[str]] = []
+            start = 0
+            while start < len(ids):
+                end = start + max_len
+                w_ids = ids[start:end]
+                w_sur = surfaces[start:end]
+                pad   = max_len - len(w_ids)
+                win_ids.append(w_ids + [PAD_ID] * pad)
+                win_sur.append(w_sur + [""] * pad)
+                if end >= len(ids):
+                    break
+                start += stride
+
+            # Build one batched tensor across all windows and run a single
+            # forward pass — cheaper than N separate calls.
+            batch_ids, batch_chars, batch_feats, batch_mask = [], [], [], []
+            for w_ids, w_sur in zip(win_ids, win_sur):
+                batch_ids.append(w_ids)
+                batch_chars.append([chars_to_ids(s, MAX_CHARS) for s in w_sur])
+                batch_feats.append([feature_vec(s) for s in w_sur])
+                batch_mask.append([int(i != PAD_ID) for i in w_ids])
+
+            ids_t   = torch.tensor(batch_ids,   dtype=torch.long,    device=self.device)
+            chars_t = torch.tensor(batch_chars, dtype=torch.long,    device=self.device)
+            feats_t = torch.tensor(batch_feats, dtype=torch.float32, device=self.device)
+            mask_t  = torch.tensor(batch_mask,  dtype=torch.bool,    device=self.device)
+
             with torch.no_grad():
-                score = self.model.doc_score(ids_t, chars_t, feats_t, mask_t).item()
-            return float(score)
+                # doc_score returns [B]; take the worst window.
+                scores = self.model.doc_score(ids_t, chars_t, feats_t, mask_t)
+            return float(scores.max().item())
         except Exception as e:
             log.warning("LSTM inference failed: %s", e)
             return 0.0

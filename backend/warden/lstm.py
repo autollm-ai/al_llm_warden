@@ -26,6 +26,10 @@ from .crf import CRF
 from .features import N_FEATURES
 
 MAX_LEN = 200
+# Sliding-window stride for texts longer than MAX_LEN. Adjacent windows
+# overlap by (MAX_LEN - WINDOW_STRIDE) tokens so sensitive content near a
+# boundary isn't split and missed. Half-window overlap is a good default.
+WINDOW_STRIDE = 50
 N_TAGS = 2  # 0 = non-sensitive, 1 = sensitive
 
 
