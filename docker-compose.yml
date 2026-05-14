@@ -55,12 +55,14 @@ services:
     volumes:
       - warden-data:/data
       - warden-models:/models
+      - ./data:/csv-data        # CSV files for batch classification
     environment:
       - WARDEN_DB=/data/warden.db
       - WARDEN_MODEL_DIR=/models
       - WARDEN_FRONTEND_DIR=/app/frontend
       - WARDEN_TEST_MODE=${WARDEN_TEST_MODE:-0}
       - WARDEN_TEST_MODE_PATH=/data/warden-test-mode.jsonl
+      - WARDEN_CSV_DIR=/csv-data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8090/api/health"]
