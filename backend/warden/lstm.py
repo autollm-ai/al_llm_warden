@@ -27,9 +27,21 @@ from .features import N_FEATURES
 
 MAX_LEN = 200
 # Sliding-window stride for texts longer than MAX_LEN. Adjacent windows
-# overlap by (MAX_LEN - WINDOW_STRIDE) tokens so sensitive content near a
-# boundary isn't split and missed. Half-window overlap is a good default.
-WINDOW_STRIDE = 50
+# overlap by (MAX_LEN - WINDOW_STRIDE) tokens so a sensitive span that
+# straddles a boundary still lands fully inside at least one window.
+# 50-token overlap covers typical secrets (cards, keys, SSNs are well under
+# 50 BPE tokens) while keeping per-token redundancy to ~1.3× instead of 4×.
+WINDOW_STRIDE = 150
+# Hard cap on input tokens fed to the windower. Beyond this we truncate —
+# vanishing-gradient already dilutes long-range signal inside each 200-tok
+# window, so adding more windows is mostly compute, and an unbounded loop
+# is an easy OOM/DoS vector when a huge body lands on the proxy.
+MAX_TEXT_LEN = 4096
+# Per-document aggregation over windows: mean of top-k window scores. Less
+# brittle to a single spuriously-high token than pure max, while still
+# firing on a needle in a haystack. With k=5 the trigger threshold becomes
+# 1/(2k) = 0.1 (vs 0.5 for the old max aggregation).
+TOPK_WINDOWS = 5
 N_TAGS = 2  # 0 = non-sensitive, 1 = sensitive
 
 
