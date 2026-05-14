@@ -5,6 +5,7 @@ GET  /api/summary          — dashboard counts + per-provider breakdown
 GET  /api/events           — paged event list
 GET  /api/events/{id}      — full event detail
 POST /api/classify         — ad-hoc classification (used by the validator)
+POST /api/classify/csv     — batch-classify rows from a CSV file
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import csv
 import io
 import json
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -388,6 +390,106 @@ def event_detail(event_id: int) -> dict:
 @app.post("/api/classify")
 def classify(body: ClassifyBody) -> dict:
     return _classifier.classify(body.text).to_dict()
+
+
+# Directory where CSV files are read from.
+# Maps to ./data/ on the host via the bind mount in docker-compose.yml.
+_CSV_DIR = Path(os.environ.get("WARDEN_CSV_DIR", "/csv-data"))
+_CSV_INPUT_FILE = _CSV_DIR / "input.csv"
+
+
+class CsvClassifyBody(BaseModel):
+    filename: str           # e.g. "input.csv"  — file must be in WARDEN_CSV_DIR
+    text_column: str = "text"
+
+
+@app.post("/api/classify/csv")
+def classify_csv(body: CsvClassifyBody) -> dict:
+    """Classify every row of a CSV file placed in the project's data/ folder.
+
+    The file must exist at  <project>/data/<filename>  on the host, which is
+    bind-mounted to /csv-data inside the container.
+
+    Request body:
+      filename    — file name only, e.g. "input.csv"  (required)
+      text_column — column that holds the text         (default: "text")
+    """
+    # Prevent path traversal — allow only a bare filename
+    if "/" in body.filename or "\\" in body.filename or body.filename.startswith("."):
+        raise HTTPException(400, "filename must be a plain file name, not a path")
+
+    csv_path = (_CSV_DIR / body.filename).resolve()
+    if not csv_path.exists():
+        raise HTTPException(
+            404,
+            f"{body.filename!r} not found. "
+            f"Place the file in the project's data/ directory and try again.",
+        )
+    if not csv_path.is_file():
+        raise HTTPException(400, f"{body.filename!r} is not a regular file")
+
+    results: list[dict] = []
+    errors: list[dict] = []
+    label_counts: dict[str, int] = {}
+    total_sensitivity = 0.0
+    batch_start = time.perf_counter()
+
+    with csv_path.open(newline="", encoding="utf-8-sig") as fh:
+        reader = csv.DictReader(fh)
+        if reader.fieldnames is None or body.text_column not in reader.fieldnames:
+            available = list(reader.fieldnames or [])
+            raise HTTPException(
+                400,
+                f"Column {body.text_column!r} not found. "
+                f"Available columns: {available}",
+            )
+        for row_num, row in enumerate(reader, start=1):
+            text = (row.get(body.text_column) or "").strip()
+            t0 = time.perf_counter()
+            try:
+                clf = _classifier.classify(text)
+                elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+                label_counts[clf.label] = label_counts.get(clf.label, 0) + 1
+                total_sensitivity += clf.effective_sensitivity
+                results.append({
+                    "row": row_num,
+                    "text": text,
+                    "sensitivity": clf.sensitivity,
+                    "effective_sensitivity": clf.effective_sensitivity,
+                    "label": clf.label,
+                    "tier1_score": clf.tier1_score,
+                    "tier2_score": clf.tier2_score,
+                    "categories": clf.categories,
+                    "intent": clf.intent,
+                    "intent_conf": clf.intent_conf,
+                    "summary": clf.summary,
+                    "classification_ms": elapsed_ms,
+                })
+            except Exception as exc:
+                elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+                errors.append({"row": row_num, "text": text,
+                               "error": str(exc), "classification_ms": elapsed_ms})
+
+    total_ms = round((time.perf_counter() - batch_start) * 1000, 2)
+    processed = len(results)
+    avg_ms = round(total_ms / processed, 2) if processed else 0.0
+    avg_sensitivity = round(total_sensitivity / processed, 4) if processed else 0.0
+
+    return {
+        "file": str(csv_path),
+        "text_column": body.text_column,
+        "stats": {
+            "total_rows": processed + len(errors),
+            "processed": processed,
+            "errors": len(errors),
+            "total_ms": total_ms,
+            "avg_ms_per_row": avg_ms,
+            "avg_effective_sensitivity": avg_sensitivity,
+            "label_distribution": label_counts,
+        },
+        "results": results,
+        "error_rows": errors,
+    }
 
 
 # ── Static frontend ──────────────────────────────────────────────────────────
