@@ -15,10 +15,6 @@ scores it for sensitive content **before** it leaves your laptop.
 - **One command:** `docker compose up` brings up the proxy, the API, the
   dashboard, and the model.
 
-The web UI follows the [Mixpanel design language](mixpanel.com) — DM Sans,
-purple accent, off-white surfaces — and uses the
-[`autollm.ai`](https://autollm.ai) mark.
-
 ---
 
 ## Quick start — two commands

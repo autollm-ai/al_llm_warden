@@ -158,15 +158,26 @@ class Classifier:
         hits = re_hits + dc_hits
         # Treat the two tier-1 pipelines as independent saturating signals.
         tier1 = re_score + (1.0 - re_score) * dc_score
-        tier2 = 0.0 if dcg_only else (self._tier2_score(text) if self.model and self.tokenizer else 0.0)
+        if dcg_only or not (self.model and self.tokenizer):
+            tier2, tier2_windows = 0.0, 0
+        else:
+            tier2, tier2_windows = self._tier2_score(text)
 
         # Blend: take whichever signal is stronger and amplify with the other.
         base = max(tier1, tier2)
         boost = (1.0 - base) * min(tier1, tier2) * self.tier2_weight
         sensitivity = min(1.0, base + boost)
 
+        # Length-aware trigger for the `semantic` category. Top-k-mean only
+        # smooths the score when there are >k windows; below that, the score
+        # is effectively pure-max and the old 0.5 threshold still applies.
+        # Above k windows the top-k mean is naturally lower, so we drop the
+        # threshold to 1/(2k) to compensate.
+        from . import lstm as _lstm_consts
+        tier2_trigger = 0.1 if tier2_windows >= _lstm_consts.TOPK_WINDOWS else 0.5
+
         cats = sorted({h.category for h in hits})
-        if tier2 >= 0.5 and not cats:
+        if tier2 >= tier2_trigger and not cats:
             cats.append("semantic")
 
         # Intent demotion: telemetry / antiabuse / handshake bodies look
@@ -187,7 +198,8 @@ class Classifier:
             label = "critical"
             effective = 1.0
 
-        summary = self._summary(hits, tier1, tier2, sensitivity, ir)
+        summary = self._summary(hits, tier1, tier2, sensitivity, ir,
+                                tier2_trigger=tier2_trigger)
         return Classification(
             sensitivity=round(sensitivity, 4),
             tier1_score=round(tier1, 4),
@@ -239,9 +251,12 @@ class Classifier:
             out.append(h)
         return out
 
-    def _tier2_score(self, text: str) -> float:
+    def _tier2_score(self, text: str) -> tuple[float, int]:
+        """Returns (score, n_windows). n_windows lets the caller pick a
+        length-aware trigger threshold — top-k-mean only meaningfully
+        smooths the score when n_windows > k."""
         if not self._torch_available or self.tokenizer is None or self.model is None:
-            return 0.0
+            return 0.0, 0
         try:
             import torch
             from . import lstm
@@ -249,28 +264,66 @@ class Classifier:
             from .features import feature_vec
             from .bpe import PAD_ID
 
-            ids, _offsets, surfaces = self.tokenizer.encode_with_offsets(
-                text, max_len=lstm.MAX_LEN
-            )
-            chars = [chars_to_ids(s, MAX_CHARS) for s in surfaces]
-            feats = [feature_vec(s) for s in surfaces]
-            mask = [int(i != PAD_ID) for i in ids]
-            if sum(mask) == 0:
-                return 0.0
-            ids_t   = torch.tensor([ids],   dtype=torch.long,    device=self.device)
-            chars_t = torch.tensor([chars], dtype=torch.long,    device=self.device)
-            feats_t = torch.tensor([feats], dtype=torch.float32, device=self.device)
-            mask_t  = torch.tensor([mask],  dtype=torch.bool,    device=self.device)
+            max_len = lstm.MAX_LEN
+            stride  = lstm.WINDOW_STRIDE
+
+            # Encode and truncate. We slice manually instead of passing
+            # `max_len=` to the tokenizer because that path also PAD-fills
+            # shorter texts, which would spawn empty trailing windows here.
+            ids, _offsets, surfaces = self.tokenizer.encode_with_offsets(text)
+            if not ids:
+                return 0.0, 0
+            if len(ids) > lstm.MAX_TEXT_LEN:
+                ids      = ids[:lstm.MAX_TEXT_LEN]
+                surfaces = surfaces[:lstm.MAX_TEXT_LEN]
+
+            # Slice into overlapping windows of max_len tokens. For short texts
+            # this produces exactly one window — same cost as before.
+            win_ids: list[list[int]] = []
+            win_sur: list[list[str]] = []
+            start = 0
+            while start < len(ids):
+                end = start + max_len
+                w_ids = ids[start:end]
+                w_sur = surfaces[start:end]
+                pad   = max_len - len(w_ids)
+                win_ids.append(w_ids + [PAD_ID] * pad)
+                win_sur.append(w_sur + [""] * pad)
+                if end >= len(ids):
+                    break
+                start += stride
+
+            # Build one batched tensor across all windows and run a single
+            # forward pass — cheaper than N separate calls.
+            batch_ids, batch_chars, batch_feats, batch_mask = [], [], [], []
+            for w_ids, w_sur in zip(win_ids, win_sur):
+                batch_ids.append(w_ids)
+                batch_chars.append([chars_to_ids(s, MAX_CHARS) for s in w_sur])
+                batch_feats.append([feature_vec(s) for s in w_sur])
+                batch_mask.append([int(i != PAD_ID) for i in w_ids])
+
+            ids_t   = torch.tensor(batch_ids,   dtype=torch.long,    device=self.device)
+            chars_t = torch.tensor(batch_chars, dtype=torch.long,    device=self.device)
+            feats_t = torch.tensor(batch_feats, dtype=torch.float32, device=self.device)
+            mask_t  = torch.tensor(batch_mask,  dtype=torch.bool,    device=self.device)
+
             with torch.no_grad():
-                score = self.model.doc_score(ids_t, chars_t, feats_t, mask_t).item()
-            return float(score)
+                # doc_score returns [B] (per-window max-token marginal).
+                # Aggregate across windows with mean-of-top-k — robust to a
+                # single spurious high-confidence token while still firing
+                # when only one window is genuinely sensitive.
+                scores = self.model.doc_score(ids_t, chars_t, feats_t, mask_t)
+            k = min(lstm.TOPK_WINDOWS, scores.numel())
+            topk = torch.topk(scores, k=k).values
+            return float(topk.mean().item()), int(scores.numel())
         except Exception as e:
             log.warning("LSTM inference failed: %s", e)
-            return 0.0
+            return 0.0, 0
 
     @staticmethod
     def _summary(hits, tier1: float, tier2: float, sensitivity: float,
-                 ir: intent_mod.IntentResult | None = None) -> str:
+                 ir: intent_mod.IntentResult | None = None,
+                 tier2_trigger: float = 0.1) -> str:
         if not hits and sensitivity < 0.15:
             return "No sensitive content detected."
         parts: list[str] = []
@@ -285,7 +338,7 @@ class Classifier:
             parts.append("destructive command(s): " + _top_names(dcg_hits))
         if identity_hits:
             parts.append(f"recognised user identity ×{len(identity_hits)} (exempt)")
-        if tier2 >= 0.5:
+        if tier2 >= tier2_trigger:
             parts.append(f"semantic model flagged sensitive content (p={tier2:.2f})")
         if not parts:
             parts.append(f"low-confidence semantic signal (p={tier2:.2f})")
