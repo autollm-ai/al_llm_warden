@@ -585,9 +585,12 @@ def training_start() -> dict:
     return {"started": True, "pid": proc.pid, "annotated_samples": len(annotated)}
 
 
+_RELOAD_SIGNAL = Path(os.environ.get("WARDEN_MODEL_DIR", "/models")) / ".reload_signal"
+
+
 @app.post("/api/training/reload")
 def training_reload() -> dict:
-    """Hot-reload the classifier from the latest model files without restarting."""
+    """Hot-reload the classifier in the API process and signal the proxy to reload too."""
     global _classifier
     tok_path, model_path = _cls.default_paths()
     if not Path(tok_path).exists() or not Path(model_path).exists():
@@ -595,7 +598,12 @@ def training_reload() -> dict:
     with _classifier_lock:
         _classifier = _cls.Classifier.from_paths(tok_path, model_path)
     tier2 = _classifier.model is not None
-    return {"reloaded": True, "tier2_enabled": tier2}
+    # Signal the proxy container (shares /models volume) to reload on next request.
+    try:
+        _RELOAD_SIGNAL.touch()
+    except Exception:
+        pass
+    return {"reloaded": True, "tier2_enabled": tier2, "proxy_signal_sent": True}
 
 
 @app.get("/api/training/export.csv")

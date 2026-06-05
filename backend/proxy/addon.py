@@ -416,10 +416,14 @@ _KEPT_HEADERS = frozenset({
 })
 
 
+_RELOAD_SIGNAL = os.path.join(os.environ.get("WARDEN_MODEL_DIR", "/models"), ".reload_signal")
+
+
 class Warden:
     def __init__(self) -> None:
         tok_path, model_path = _cls.default_paths()
         self.classifier = _cls.Classifier.from_paths(tok_path, model_path)
+        self._clf_lock = threading.Lock()
         self.store = EventStore()
         self._capture = _TestModeCapture(_TEST_MODE_PATH) if _TEST_MODE else None
         log.info(
@@ -432,6 +436,19 @@ class Warden:
             _TAP_STREAMS,
             _GUARDRAIL_RESPONSES,
         )
+
+    def _maybe_reload(self) -> None:
+        if not os.path.exists(_RELOAD_SIGNAL):
+            return
+        try:
+            os.remove(_RELOAD_SIGNAL)
+        except OSError:
+            return  # another thread already handled it
+        tok_path, model_path = _cls.default_paths()
+        new_clf = _cls.Classifier.from_paths(tok_path, model_path)
+        with self._clf_lock:
+            self.classifier = new_clf
+        log.info("Warden proxy: classifier reloaded — tier2=%s", new_clf.model is not None)
 
     # ─── streaming control ────────────────────────────────────────────────
     # mitmdump runs with --set stream_large_bodies=… so SSE responses (chatgpt
@@ -478,6 +495,7 @@ class Warden:
             flow.response.stream = False
 
     def request(self, flow: http.HTTPFlow) -> None:
+        self._maybe_reload()
         host = flow.request.pretty_host
         provider = lookup_provider(host)
         if provider is None:
@@ -495,7 +513,9 @@ class Warden:
         text = _decode_for_scoring(body_bytes, content_type)
         text = _flatten_payload(text, content_type)
 
-        result = self.classifier.classify(
+        with self._clf_lock:
+            clf = self.classifier
+        result = clf.classify(
             text,
             provider=provider,
             method=flow.request.method,
@@ -690,7 +710,9 @@ class Warden:
         # removed; if it ever needs to come back for a different signal,
         # gate it on something other than length.
 
-        result = self.classifier.classify(
+        with self._clf_lock:
+            clf = self.classifier
+        result = clf.classify(
             text,
             provider=provider,
             method=flow.request.method,
