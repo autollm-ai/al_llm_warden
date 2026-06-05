@@ -69,10 +69,6 @@ class AnnotateBody(BaseModel):
     ground_truth_label: str | None = None
 
 
-class RealGenerateBody(BaseModel):
-    openai_count: int = 0
-
-
 class AdminPurgeBody(BaseModel):
     """Request body for /api/admin/purge.
 
@@ -443,59 +439,8 @@ def event_annotate(event_id: int, body: AnnotateBody) -> dict:
 
 # ── Training pipeline ────────────────────────────────────────────────────────
 
-_REAL_GEN_STATUS_PATH   = Path(os.environ.get("WARDEN_MODEL_DIR", "/models")) / "real_generate_status.json"
 _TRAINING_STATUS_PATH   = Path(os.environ.get("WARDEN_MODEL_DIR", "/models")) / "training_status.json"
 _LABEL_TO_INT = {"false_positive": 0, "clean": 0, "low": 1, "medium": 1, "high": 1, "critical": 1}
-
-
-@app.get("/api/config/keys")
-def config_keys() -> dict:
-    """Return which API keys are available (booleans only, never the values)."""
-    return {
-        "has_openai": bool(os.environ.get("OPENAI_API_KEY", "").strip()),
-    }
-
-
-@app.get("/api/events/generate-real/status")
-def events_generate_real_status() -> dict:
-    """Poll progress of a running real-LLM-call generation job."""
-    if not _REAL_GEN_STATUS_PATH.exists():
-        return {"running": False, "done": 0, "total": 0, "ok": 0}
-    try:
-        return json.loads(_REAL_GEN_STATUS_PATH.read_text())
-    except Exception:
-        return {"running": False, "done": 0, "total": 0, "ok": 0}
-
-
-@app.post("/api/events/generate-real")
-def events_generate_real(body: RealGenerateBody) -> dict:
-    """Start a background job that makes real OpenAI API calls and records events.
-    Claude events are generated on the host via scripts/generate_real_traffic.py."""
-    if body.openai_count < 1:
-        raise HTTPException(400, "openai_count must be at least 1")
-    if not os.environ.get("OPENAI_API_KEY", "").strip():
-        raise HTTPException(400, "OPENAI_API_KEY not configured")
-
-    try:
-        cur = json.loads(_REAL_GEN_STATUS_PATH.read_text()) if _REAL_GEN_STATUS_PATH.exists() else {}
-        if cur.get("running"):
-            raise HTTPException(409, "real generation already running")
-    except HTTPException:
-        raise
-    except Exception:
-        pass
-
-    cmd = [
-        sys.executable, "-m", "training.generate_real",
-        "--openai", str(body.openai_count),
-    ]
-    try:
-        proc = subprocess.Popen(cmd, cwd="/app",
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                env=dict(os.environ))
-    except Exception as e:
-        raise HTTPException(500, f"failed to start generation: {e}")
-    return {"started": True, "pid": proc.pid, "openai_count": body.openai_count}
 
 
 @app.get("/api/annotation/summary")

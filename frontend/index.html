@@ -308,53 +308,16 @@
       <div class="section-head">
         <h2 class="section-title">Model training</h2>
         <p class="section-desc">
-          Collect real LLM events, label them, then retrain the BiLSTM classifier on your own data.
-          The proxy keeps scoring traffic normally while training runs in the background.
+          Route your LLM traffic through the proxy to capture real events, label them, then retrain
+          the BiLSTM classifier on your own data. Training runs in the background while the proxy
+          keeps scoring traffic normally.
         </p>
       </div>
 
-      <!-- Step 1: Collect events -->
-      <div class="test-card" style="margin-bottom: var(--sp-4)">
-        <h3 style="font-size:15px; font-weight:600; margin-bottom:var(--sp-2)">
-          Step 1 — Collect real events
-        </h3>
-        <p style="font-size:13px; color:var(--mp-text-secondary); margin-bottom:var(--sp-3)">
-          Any LLM traffic routed through the proxy is captured automatically. You can also seed
-          the database with real OpenAI API calls using the button below
-          (requires <code>OPENAI_API_KEY</code> in your environment).
-        </p>
-        <div style="display:flex; gap:var(--sp-6); flex-wrap:wrap; margin-bottom:var(--sp-4)">
-          <div class="stat" style="min-width:110px">
-            <div class="stat-num" id="real-gen-done">—</div>
-            <div class="stat-label">API calls done</div>
-          </div>
-          <div class="stat" style="min-width:110px">
-            <div class="stat-num" id="real-gen-ok">—</div>
-            <div class="stat-label">responses recorded</div>
-          </div>
-          <div class="stat" style="min-width:110px">
-            <div class="stat-num" id="real-gen-eta" style="font-size:18px">—</div>
-            <div class="stat-label">ETA</div>
-          </div>
-        </div>
-        <div class="test-actions" style="flex-wrap:wrap; gap:var(--sp-3)">
-          <span id="key-openai" class="badge badge-outline">Checking…</span>
-          <label style="display:flex; align-items:center; gap:6px; font-size:13px">
-            OpenAI calls
-            <input type="number" id="openai-count" value="50" min="1" max="500"
-                   style="width:70px; padding:5px 8px; border-radius:var(--r-sm);
-                          border:1px solid var(--mp-border); background:var(--mp-card);
-                          color:var(--mp-text); font-size:14px" />
-          </label>
-          <button class="btn btn-primary btn-md" id="real-gen-btn">Generate OpenAI events</button>
-          <span class="test-hint" id="real-gen-hint"></span>
-        </div>
-      </div>
-
-      <!-- Step 2: Annotate -->
+      <!-- Step 1: Annotate -->
       <div class="test-card" style="margin-bottom:var(--sp-4)">
         <h3 style="font-size:15px; font-weight:600; margin-bottom:var(--sp-2)">
-          Step 2 — Annotate events
+          Step 1 — Annotate events
         </h3>
         <p style="font-size:13px; color:var(--mp-text-secondary); margin-bottom:var(--sp-3)">
           Open any event in the <a href="#events">Events table</a> and assign a ground-truth
@@ -373,10 +336,10 @@
         </div>
       </div>
 
-      <!-- Step 3: Retrain -->
+      <!-- Step 2: Retrain -->
       <div class="test-card">
         <h3 style="font-size:15px; font-weight:600; margin-bottom:var(--sp-2)">
-          Step 3 — Retrain the classifier
+          Step 2 — Retrain the classifier
         </h3>
         <p style="font-size:13px; color:var(--mp-text-secondary); margin-bottom:var(--sp-3)">
           Kicks off a training run using your annotated events. Takes a few minutes depending on

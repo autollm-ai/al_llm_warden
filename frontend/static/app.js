@@ -684,120 +684,6 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-// ── CLAUDE TERMINAL COMMAND ───────────────────────────────────────────────────
-
-function updateClaudeCmd() {
-  const count = parseInt($("#claude-count")?.value || "50", 10) || 50;
-  const cmdEl = $("#claude-gen-cmd");
-  if (cmdEl) cmdEl.textContent = `python scripts/generate_real_traffic.py --claude-only --count ${count}`;
-}
-
-const claudeCountInput = $("#claude-count");
-if (claudeCountInput) claudeCountInput.addEventListener("input", updateClaudeCmd);
-updateClaudeCmd();
-
-document.addEventListener("click", async (e) => {
-  if (e.target.id !== "claude-cmd-copy") return;
-  const cmd = $("#claude-gen-cmd")?.textContent || "";
-  try {
-    await navigator.clipboard.writeText(cmd);
-    e.target.textContent = "Copied!";
-    setTimeout(() => { e.target.textContent = "Copy command"; }, 2000);
-  } catch {
-    e.target.textContent = "Select the box above";
-    setTimeout(() => { e.target.textContent = "Copy command"; }, 2000);
-  }
-});
-
-async function loadAnthropicEventCount() {
-  try {
-    const data = await api("/api/events?provider=Anthropic&limit=1");
-    // The API returns a count indirectly — check total via summary
-    const s = await api("/api/summary");
-    const byProvider = s.by_provider || [];
-    const ant = byProvider.find(p => p.provider === "Anthropic");
-    const el = $("#anthropic-event-count");
-    if (el) el.textContent = fmtNum(ant ? ant.events : 0);
-  } catch { /* ignore */ }
-}
-
-// ── API KEY STATUS ────────────────────────────────────────────────────────────
-
-async function loadKeyStatus() {
-  let keys;
-  try { keys = await api("/api/config/keys"); }
-  catch { return; }
-
-  const oaiEl  = $("#key-openai");
-  if (oaiEl) {
-    oaiEl.textContent = keys.has_openai ? "OpenAI: configured" : "OpenAI: not set";
-    oaiEl.className = keys.has_openai ? "badge badge-ok" : "badge badge-warn";
-  }
-}
-
-// ── GENERATE REAL LLM EVENTS ──────────────────────────────────────────────────
-
-function fmtEta(seconds) {
-  if (seconds == null) return "—";
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
-
-async function loadRealGenStatus() {
-  let s;
-  try { s = await api("/api/events/generate-real/status"); }
-  catch { return; }
-
-  const doneEl = $("#real-gen-done");
-  const okEl   = $("#real-gen-ok");
-  const etaEl  = $("#real-gen-eta");
-  const hintEl = $("#real-gen-hint");
-  const btn    = $("#real-gen-btn");
-
-  if (doneEl) doneEl.textContent = s.total ? `${fmtNum(s.done)} / ${fmtNum(s.total)}` : fmtNum(s.done || 0);
-  if (okEl)   okEl.textContent = fmtNum(s.ok || 0);
-  if (etaEl)  etaEl.textContent = s.running ? fmtEta(s.eta_seconds) : (s.finished_at ? "Done" : "—");
-  if (hintEl) {
-    hintEl.textContent = s.running
-      ? `Running at ${s.rate || "?"} calls/s…`
-      : (s.finished_at ? `Finished ${formatTime(s.finished_at)} · ${s.ok || 0} responses recorded` : "");
-  }
-  if (btn) btn.disabled = !!s.running;
-}
-
-const realGenBtn = $("#real-gen-btn");
-if (realGenBtn) {
-  realGenBtn.addEventListener("click", async () => {
-    const openaiCount = parseInt($("#openai-count")?.value || "0", 10);
-    if (openaiCount < 1) {
-      alert("Enter at least 1 for OpenAI calls."); return;
-    }
-    const estMin = Math.ceil(openaiCount * 2 / 60);
-    if (!confirm(
-      `Make ${openaiCount.toLocaleString()} real OpenAI API calls?\n\n` +
-      `This will consume API credits. Estimated time: ~${estMin} min.\n` +
-      `Each call generates up to 2 events (request + response).`
-    )) return;
-
-    realGenBtn.disabled = true;
-    realGenBtn.textContent = "Starting…";
-    try {
-      await api("/api/events/generate-real", {
-        method: "POST",
-        body: JSON.stringify({ openai_count: openaiCount }),
-      });
-      const hintEl = $("#real-gen-hint");
-      if (hintEl) hintEl.textContent = "Started — progress updates every few seconds.";
-      await loadRealGenStatus();
-    } catch (err) {
-      alert("Failed to start: " + err.message);
-      realGenBtn.disabled = false;
-    } finally {
-      realGenBtn.textContent = "Generate OpenAI events";
-    }
-  });
-}
 
 // ── PIPELINE SUMMARY ────────────────────────────────────────────────────────
 
@@ -965,8 +851,7 @@ async function refresh() {
     loadHealth(), loadSummary(), loadEvents(),
     loadIdentity(), loadDomains(),
     pollCriticalResponses(),
-    loadKeyStatus(), loadAnthropicEventCount(),
-    loadRealGenStatus(), loadTrainingStatus(),
+    loadTrainingStatus(),
     loadPipelineSummary(),
   ]);
 }
