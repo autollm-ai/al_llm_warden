@@ -31,7 +31,7 @@ COPY backend/proxy     /app/proxy
 COPY backend/api       /app/api
 COPY backend/training  /app/training
 COPY backend/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 COPY frontend          /app/frontend
 

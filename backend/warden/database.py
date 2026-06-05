@@ -68,6 +68,7 @@ _MIGRATIONS: list[tuple[str, str]] = [
     ("intent_conf",           "ALTER TABLE events ADD COLUMN intent_conf REAL NOT NULL DEFAULT 0.0"),
     ("effective_sensitivity", "ALTER TABLE events ADD COLUMN effective_sensitivity REAL NOT NULL DEFAULT 0.0"),
     ("direction",             "ALTER TABLE events ADD COLUMN direction TEXT NOT NULL DEFAULT 'request'"),
+    ("ground_truth_label",    "ALTER TABLE events ADD COLUMN ground_truth_label TEXT DEFAULT NULL"),
 ]
 
 
@@ -188,6 +189,22 @@ class EventStore:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone()
         return self._row_to_dict(row) if row else None
+
+    def annotate_event(self, event_id: int, label: str | None) -> bool:
+        with self._lock, self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE events SET ground_truth_label = ? WHERE id = ?",
+                (label, event_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def annotated_for_training(self) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM events WHERE ground_truth_label IS NOT NULL ORDER BY id"
+            ).fetchall()
+        return [self._row_to_dict(r) for r in rows]
 
     def summary(self) -> dict:
         with self._connect() as conn:

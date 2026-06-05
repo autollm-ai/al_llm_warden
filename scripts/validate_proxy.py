@@ -24,6 +24,10 @@ import time
 import urllib.error
 import urllib.request
 
+# Force UTF-8 output on Windows so ✔/✘ symbols don't crash CP1252 terminals.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 DEFAULT_PROXY = "http://localhost:8080"
 DEFAULT_API = "http://localhost:8090"
 
@@ -102,8 +106,12 @@ def check_intercept_via_test_endpoint(api_url: str) -> bool:
         "called about charge on card 4111 1111 1111 1111 — also our "
         "OPENAI_API_KEY is sk-abcd1234efgh5678ijkl9012mnop3456qrst7890."
     )
+    # The LSTM needs up to ~40 s on first inference (CPU cold-start / JIT
+    # compilation). Use a generous timeout so validation doesn't fail just
+    # because the model hadn't been called yet since container start.
     try:
-        status, _, body = _post_json(api_url + "/api/classify", {"text": sample})
+        status, _, body = _post_json(api_url + "/api/classify", {"text": sample},
+                                     timeout=60.0)
     except Exception as e:
         print(FAIL(f"/api/classify request failed: {e}"))
         return False
@@ -145,7 +153,12 @@ def check_intercept_via_proxy(proxy_url: str) -> bool:
             },
         )
         try:
-            resp = opener.open(req, timeout=10)
+            # The warden-proxy addon runs LSTM inference synchronously inside
+            # mitmproxy's request() hook, which blocks the event loop.  On
+            # cold start (first request after container boot) this can take
+            # ~35 s on CPU.  Use a generous timeout so the check doesn't give
+            # up before the proxy has had a chance to forward the request.
+            resp = opener.open(req, timeout=120)
             headers = dict(resp.headers)
         except urllib.error.HTTPError as e:
             # 401/403 is fine — we're not actually authenticated. We just want

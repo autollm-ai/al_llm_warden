@@ -432,6 +432,15 @@ async function openDetail(id) {
          <code>${escapeHtml(h.name)}</code>
          <span style="margin-left:auto; color: var(--mp-text-secondary)">${escapeHtml(h.snippet)}</span></li>`;
   }).join("") || `<li style="color: var(--mp-text-tertiary)">No deterministic hits.</li>`;
+
+  const ANNOTATE_OPTIONS = ["false_positive", "clean", "low", "medium", "high", "critical"];
+  const currentGtl = r.ground_truth_label || "";
+  const annotationBtns = ANNOTATE_OPTIONS.map(l =>
+    `<button class="btn btn-sm annotate-btn ${currentGtl === l ? "btn-primary" : "btn-secondary"}"
+             data-label="${escapeAttr(l)}">${escapeHtml(l)}</button>`
+  ).join("") +
+    `<button class="btn btn-sm btn-secondary annotate-btn" data-label="">Clear</button>`;
+
   $("#modal-body").innerHTML = `
     <h3 style="font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px">
       Event #${r.id} — ${escapeHtml(r.provider)}
@@ -458,6 +467,17 @@ async function openDetail(id) {
       <div class="detail-row"><dt>Regex hits</dt><dd><ul class="hits-list">${hits}</ul></dd></div>
       <div class="detail-row"><dt>Request preview</dt>
         <dd><pre class="copy-block">${escapeHtml(r.sample || "")}</pre></dd></div>
+      <div class="detail-row">
+        <dt>Ground truth</dt>
+        <dd>
+          <div class="annotate-btns" data-event-id="${r.id}" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px">
+            ${annotationBtns}
+          </div>
+          <span class="annotate-feedback" style="font-size:13px; color: var(--mp-text-secondary)">
+            ${currentGtl ? `Saved: ${escapeHtml(currentGtl)}` : "Not annotated yet"}
+          </span>
+        </dd>
+      </div>
     </dl>`;
   $("#modal").hidden = false;
 }
@@ -598,8 +618,336 @@ async function pollCriticalResponses() {
 if ($("#alerts-btn")) $("#alerts-btn").addEventListener("click", toggleAlerts);
 renderAlertsButton();
 
+// ── ANNOTATION BUTTONS ───────────────────────────────────────────────────────
+
+document.addEventListener("click", async (e) => {
+  if (!e.target.classList.contains("annotate-btn")) return;
+  const btn = e.target;
+  const container = btn.closest(".annotate-btns");
+  if (!container) return;
+  const eventId = container.dataset.eventId;
+  const label = btn.dataset.label || null;
+  const feedback = container.parentElement.querySelector(".annotate-feedback");
+  btn.disabled = true;
+  try {
+    await api(`/api/events/${eventId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ground_truth_label: label }),
+    });
+    container.querySelectorAll(".annotate-btn").forEach(b => {
+      b.classList.remove("btn-primary");
+      b.classList.add("btn-secondary");
+    });
+    if (label) {
+      btn.classList.remove("btn-secondary");
+      btn.classList.add("btn-primary");
+    }
+    if (feedback) {
+      feedback.textContent = label ? `Saved: ${label}` : "Cleared";
+    }
+  } catch (err) {
+    if (feedback) feedback.textContent = "Save failed: " + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ── JSON EXPORT ──────────────────────────────────────────────────────────────
+
+document.addEventListener("click", async (e) => {
+  if (e.target.id !== "export-json") return;
+  e.preventDefault();
+  const btn = e.target;
+  btn.disabled = true;
+  btn.textContent = "Exporting…";
+  try {
+    const res = await fetch("/api/events/export.json");
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const j = await res.json(); if (j.detail) msg += ` — ${j.detail}`; } catch {}
+      alert("Export failed: " + msg);
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "Z");
+    a.download = `warden-events-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Export failed: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Export all (JSON)";
+  }
+});
+
+// ── CLAUDE TERMINAL COMMAND ───────────────────────────────────────────────────
+
+function updateClaudeCmd() {
+  const count = parseInt($("#claude-count")?.value || "50", 10) || 50;
+  const cmdEl = $("#claude-gen-cmd");
+  if (cmdEl) cmdEl.textContent = `python scripts/generate_real_traffic.py --claude-only --count ${count}`;
+}
+
+const claudeCountInput = $("#claude-count");
+if (claudeCountInput) claudeCountInput.addEventListener("input", updateClaudeCmd);
+updateClaudeCmd();
+
+document.addEventListener("click", async (e) => {
+  if (e.target.id !== "claude-cmd-copy") return;
+  const cmd = $("#claude-gen-cmd")?.textContent || "";
+  try {
+    await navigator.clipboard.writeText(cmd);
+    e.target.textContent = "Copied!";
+    setTimeout(() => { e.target.textContent = "Copy command"; }, 2000);
+  } catch {
+    e.target.textContent = "Select the box above";
+    setTimeout(() => { e.target.textContent = "Copy command"; }, 2000);
+  }
+});
+
+async function loadAnthropicEventCount() {
+  try {
+    const data = await api("/api/events?provider=Anthropic&limit=1");
+    // The API returns a count indirectly — check total via summary
+    const s = await api("/api/summary");
+    const byProvider = s.by_provider || [];
+    const ant = byProvider.find(p => p.provider === "Anthropic");
+    const el = $("#anthropic-event-count");
+    if (el) el.textContent = fmtNum(ant ? ant.events : 0);
+  } catch { /* ignore */ }
+}
+
+// ── API KEY STATUS ────────────────────────────────────────────────────────────
+
+async function loadKeyStatus() {
+  let keys;
+  try { keys = await api("/api/config/keys"); }
+  catch { return; }
+
+  const oaiEl  = $("#key-openai");
+  if (oaiEl) {
+    oaiEl.textContent = keys.has_openai ? "OpenAI: configured" : "OpenAI: not set";
+    oaiEl.className = keys.has_openai ? "badge badge-ok" : "badge badge-warn";
+  }
+}
+
+// ── GENERATE REAL LLM EVENTS ──────────────────────────────────────────────────
+
+function fmtEta(seconds) {
+  if (seconds == null) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+async function loadRealGenStatus() {
+  let s;
+  try { s = await api("/api/events/generate-real/status"); }
+  catch { return; }
+
+  const doneEl = $("#real-gen-done");
+  const okEl   = $("#real-gen-ok");
+  const etaEl  = $("#real-gen-eta");
+  const hintEl = $("#real-gen-hint");
+  const btn    = $("#real-gen-btn");
+
+  if (doneEl) doneEl.textContent = s.total ? `${fmtNum(s.done)} / ${fmtNum(s.total)}` : fmtNum(s.done || 0);
+  if (okEl)   okEl.textContent = fmtNum(s.ok || 0);
+  if (etaEl)  etaEl.textContent = s.running ? fmtEta(s.eta_seconds) : (s.finished_at ? "Done" : "—");
+  if (hintEl) {
+    hintEl.textContent = s.running
+      ? `Running at ${s.rate || "?"} calls/s…`
+      : (s.finished_at ? `Finished ${formatTime(s.finished_at)} · ${s.ok || 0} responses recorded` : "");
+  }
+  if (btn) btn.disabled = !!s.running;
+}
+
+const realGenBtn = $("#real-gen-btn");
+if (realGenBtn) {
+  realGenBtn.addEventListener("click", async () => {
+    const openaiCount = parseInt($("#openai-count")?.value || "0", 10);
+    if (openaiCount < 1) {
+      alert("Enter at least 1 for OpenAI calls."); return;
+    }
+    const estMin = Math.ceil(openaiCount * 2 / 60);
+    if (!confirm(
+      `Make ${openaiCount.toLocaleString()} real OpenAI API calls?\n\n` +
+      `This will consume API credits. Estimated time: ~${estMin} min.\n` +
+      `Each call generates up to 2 events (request + response).`
+    )) return;
+
+    realGenBtn.disabled = true;
+    realGenBtn.textContent = "Starting…";
+    try {
+      await api("/api/events/generate-real", {
+        method: "POST",
+        body: JSON.stringify({ openai_count: openaiCount }),
+      });
+      const hintEl = $("#real-gen-hint");
+      if (hintEl) hintEl.textContent = "Started — progress updates every few seconds.";
+      await loadRealGenStatus();
+    } catch (err) {
+      alert("Failed to start: " + err.message);
+      realGenBtn.disabled = false;
+    } finally {
+      realGenBtn.textContent = "Generate OpenAI events";
+    }
+  });
+}
+
+// ── PIPELINE SUMMARY ────────────────────────────────────────────────────────
+
+async function loadPipelineSummary() {
+  let summary, annSummary;
+  try { summary    = await api("/api/summary"); }            catch { return; }
+  try { annSummary = await api("/api/annotation/summary"); } catch { annSummary = {}; }
+
+  const total      = summary.total || 0;
+  const annotated  = annSummary.annotated || 0;
+  const unannotated = Math.max(0, total - annotated);
+  const coverage   = annSummary.coverage_pct ?? (total > 0 ? Math.round((annotated / total) * 100) : 0);
+
+  setText("ps-total",       fmtNum(total));
+  setText("ps-annotated",   fmtNum(annotated));
+  setText("ps-unannotated", fmtNum(unannotated));
+  setText("ps-coverage",    coverage + "%");
+
+  const fill = document.getElementById("ps-coverage-fill");
+  if (fill) fill.style.width = coverage + "%";
+
+  // Use ground_truth_label distribution (not classifier labels)
+  const byLabel = annSummary.by_ground_truth_label || {};
+  const labelOrder = ["false_positive", "clean", "low", "medium", "high", "critical"];
+  const labelColors = {
+    false_positive: "#aaa", clean: "#2BBF7E", low: "#5BA3F5",
+    medium: "#F2A93B", high: "#F26C3B", critical: "#E83A5C",
+  };
+
+  labelOrder.forEach(l => {
+    const el = document.getElementById("ps-ann-" + (l === "false_positive" ? "fp" : l));
+    if (el) el.textContent = fmtNum(byLabel[l] || 0);
+  });
+
+  // Stacked bar from ground_truth_label counts
+  const bar = document.getElementById("ps-stacked-bar");
+  if (bar) {
+    const totalLabeled = labelOrder.reduce((a, l) => a + (byLabel[l] || 0), 0) || 1;
+    bar.innerHTML = labelOrder.map(l => {
+      const pct = ((byLabel[l] || 0) / totalLabeled * 100).toFixed(1);
+      return `<span style="flex:${pct};background:${labelColors[l]}" title="${l}: ${byLabel[l]||0}"></span>`;
+    }).join("");
+  }
+
+  // Label dist pills — ground_truth only
+  const distEl = document.getElementById("ps-label-dist");
+  if (distEl) {
+    distEl.innerHTML = Object.entries(byLabel)
+      .sort((a, b) => b[1] - a[1])
+      .map(([l, n]) => `<span class="badge badge-${l}" style="background:${labelColors[l]}20;color:${labelColors[l]};border-color:${labelColors[l]}40">${l} ${fmtNum(n)}</span>`)
+      .join("");
+  }
+
+  // Model card — populated from training/status metrics
+  let training = {};
+  try { training = await api("/api/training/status"); } catch { /* no model yet */ }
+  const m = training.metrics || {};
+  const h = m.history || [];
+  setText("ps-model-mode",   m.vocab_size ? "BiLSTM + CRF" : "Regex-only");
+  setText("ps-model-params", m.params    ? fmtNum(m.params) : "—");
+  setText("ps-model-vocab",  m.vocab_size ? fmtNum(m.vocab_size) : "—");
+  const td = m.test_doc || {};
+  setText("ps-model-valf1",  m.best_val_doc_f1 != null ? (m.best_val_doc_f1 * 100).toFixed(2) + "%" : "—");
+  setText("ps-model-testf1", td.f1 != null ? (td.f1 * 100).toFixed(2) + "%" : "—");
+  setText("ps-model-device", m.device || "—");
+}
+
+// ── TRAINING PANEL ───────────────────────────────────────────────────────────
+
+async function loadTrainingStatus() {
+  let s;
+  try { s = await api("/api/training/status"); } catch { return; }
+
+  const annotatedEl = $("#training-annotated");
+  const coverageEl  = $("#training-coverage");
+  const statusEl    = $("#training-status-text");
+  const valf1El     = $("#training-valf1");
+  const testf1El    = $("#training-testf1");
+  const hintEl      = $("#training-hint");
+
+  if (annotatedEl) annotatedEl.textContent = fmtNum(s.annotated_count || 0);
+
+  // coverage from annotation summary
+  try {
+    const ann = await api("/api/annotation/summary");
+    if (coverageEl) coverageEl.textContent = (ann.coverage_pct ?? 0) + "%";
+  } catch { /* ignore */ }
+
+  if (statusEl) {
+    statusEl.textContent = s.running
+      ? "Training…"
+      : (s.finished_at ? `Done ${formatTime(s.finished_at)}` : "Idle");
+  }
+
+  const m = s.metrics || {};
+  const td = m.test_doc || {};
+  if (valf1El)  valf1El.textContent  = m.best_val_doc_f1 != null ? (m.best_val_doc_f1 * 100).toFixed(1) + "%" : "—";
+  if (testf1El) testf1El.textContent = td.f1 != null ? (td.f1 * 100).toFixed(1) + "%" : "—";
+
+  if (hintEl) {
+    hintEl.textContent = s.annotated_count === 0
+      ? "Label some events in the Events table first."
+      : (s.running ? "Training in progress — refresh in a few minutes." : "");
+  }
+}
+
+const trainingStartBtn = $("#training-start-btn");
+if (trainingStartBtn) {
+  trainingStartBtn.addEventListener("click", async () => {
+    if (!confirm(
+      "Start retraining the LSTM classifier?\n\n" +
+      "This runs in the background and may take several minutes. " +
+      "The proxy keeps scoring traffic normally while it runs."
+    )) return;
+    trainingStartBtn.disabled = true;
+    trainingStartBtn.textContent = "Starting…";
+    try {
+      const r = await api("/api/training/start", { method: "POST", body: JSON.stringify({}) });
+      const log = $("#training-log");
+      if (log) {
+        log.hidden = false;
+        log.textContent =
+          `Training started (PID ${r.pid}).\n` +
+          `Using ${r.annotated_samples} annotated samples.\n` +
+          `Refresh in a few minutes to see val F1 update.`;
+      }
+      await loadTrainingStatus();
+    } catch (err) {
+      alert("Failed to start training: " + err.message);
+    } finally {
+      trainingStartBtn.disabled = false;
+      trainingStartBtn.textContent = "Start retraining";
+    }
+  });
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
 async function refresh() {
-  await Promise.all([loadHealth(), loadSummary(), loadEvents(), loadIdentity(), loadDomains(), pollCriticalResponses()]);
+  await Promise.all([
+    loadHealth(), loadSummary(), loadEvents(),
+    loadIdentity(), loadDomains(),
+    pollCriticalResponses(),
+    loadKeyStatus(), loadAnthropicEventCount(),
+    loadRealGenStatus(), loadTrainingStatus(),
+    loadPipelineSummary(),
+  ]);
 }
 
 refresh();

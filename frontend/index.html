@@ -21,11 +21,13 @@
         <span>autollm <em>warden</em></span>
       </a>
       <ul class="nav-links">
+        <li><a href="#pipeline">Pipeline</a></li>
         <li><a href="#dashboard">Dashboard</a></li>
         <li><a href="#identity">Identity</a></li>
         <li><a href="#domains">Domains</a></li>
         <li><a href="#events">Events</a></li>
         <li><a href="#test">Test</a></li>
+        <li><a href="#training">Training</a></li>
       </ul>
       <div class="nav-actions">
         <span id="proxy-status" class="badge badge-outline">Checking…</span>
@@ -52,6 +54,115 @@
   </header>
 
   <main class="container">
+
+    <!-- ── PIPELINE SUMMARY ─────────────────────────────────────────────── -->
+    <section id="pipeline" class="section">
+      <div class="section-head">
+        <h2 class="section-title">Pipeline summary</h2>
+        <p class="section-desc">Live snapshot of events captured and annotation coverage.</p>
+      </div>
+
+      <div class="pipeline-grid">
+
+        <!-- DATA card -->
+        <div class="pipeline-card">
+          <div class="pipeline-card-title">
+            <span class="pipeline-icon">📡</span> Data
+          </div>
+          <div class="pipeline-metrics">
+            <div class="pm-row">
+              <span class="pm-label">Total events</span>
+              <span class="pm-val" id="ps-total">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Annotated</span>
+              <span class="pm-val" id="ps-annotated">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Unannotated</span>
+              <span class="pm-val" id="ps-unannotated">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Coverage</span>
+              <span class="pm-val" id="ps-coverage">—</span>
+            </div>
+          </div>
+          <div class="pm-coverage-bar">
+            <div id="ps-coverage-fill" style="width:0%"></div>
+          </div>
+          <div class="pm-label-dist" id="ps-label-dist"></div>
+        </div>
+
+        <!-- ANNOTATION card -->
+        <div class="pipeline-card">
+          <div class="pipeline-card-title">
+            <span class="pipeline-icon">🏷️</span> Annotation
+          </div>
+          <div class="pipeline-metrics">
+            <div class="pm-row">
+              <span class="pm-label">False positive</span>
+              <span class="pm-val pm-fp" id="ps-ann-fp">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Clean</span>
+              <span class="pm-val pm-clean" id="ps-ann-clean">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Low</span>
+              <span class="pm-val pm-low" id="ps-ann-low">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Medium</span>
+              <span class="pm-val pm-medium" id="ps-ann-medium">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">High</span>
+              <span class="pm-val pm-high" id="ps-ann-high">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Critical</span>
+              <span class="pm-val pm-critical" id="ps-ann-critical">—</span>
+            </div>
+          </div>
+          <div class="pipeline-stacked-bar" id="ps-stacked-bar"></div>
+        </div>
+
+        <!-- MODEL card -->
+        <div class="pipeline-card">
+          <div class="pipeline-card-title">
+            <span class="pipeline-icon">⚙️</span> Model
+          </div>
+          <div class="pipeline-metrics">
+            <div class="pm-row">
+              <span class="pm-label">Classifier</span>
+              <span class="pm-val" id="ps-model-mode">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Parameters</span>
+              <span class="pm-val" id="ps-model-params">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Vocab size</span>
+              <span class="pm-val" id="ps-model-vocab">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Best val F1</span>
+              <span class="pm-val pm-f1" id="ps-model-valf1">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Test F1</span>
+              <span class="pm-val pm-f1" id="ps-model-testf1">—</span>
+            </div>
+            <div class="pm-row">
+              <span class="pm-label">Device</span>
+              <span class="pm-val" id="ps-model-device">—</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
     <section id="dashboard" class="section">
       <div class="section-head">
         <h2 class="section-title">Provider breakdown</h2>
@@ -148,6 +259,7 @@
         <button class="btn btn-secondary btn-sm" id="refresh-btn">Refresh</button>
         <button class="btn btn-secondary btn-sm" id="alerts-btn" title="Browser notifications when a destructive command is detected in a model response">Enable alerts</button>
         <a class="btn btn-secondary btn-sm" id="export-csv" href="/api/events.csv?min_sensitivity=0.15&limit=10000" download>Export flagged (CSV)</a>
+        <button class="btn btn-secondary btn-sm" id="export-json">Export all (JSON)</button>
         <button class="btn btn-secondary btn-sm" id="export-jsonl" hidden>Download capture (JSONL)</button>
         <span id="export-jsonl-info" class="test-hint" hidden></span>
       </div>
@@ -190,6 +302,109 @@
         <pre id="test-result" class="copy-block" hidden></pre>
       </div>
     </section>
+
+    <!-- ── TRAINING ──────────────────────────────────────────────────────── -->
+    <section id="training" class="section">
+      <div class="section-head">
+        <h2 class="section-title">Model training</h2>
+        <p class="section-desc">
+          Collect real LLM events, label them, then retrain the BiLSTM classifier on your own data.
+          The proxy keeps scoring traffic normally while training runs in the background.
+        </p>
+      </div>
+
+      <!-- Step 1: Collect events -->
+      <div class="test-card" style="margin-bottom: var(--sp-4)">
+        <h3 style="font-size:15px; font-weight:600; margin-bottom:var(--sp-2)">
+          Step 1 — Collect real events
+        </h3>
+        <p style="font-size:13px; color:var(--mp-text-secondary); margin-bottom:var(--sp-3)">
+          Any LLM traffic routed through the proxy is captured automatically. You can also seed
+          the database with real OpenAI API calls using the button below
+          (requires <code>OPENAI_API_KEY</code> in your environment).
+        </p>
+        <div style="display:flex; gap:var(--sp-6); flex-wrap:wrap; margin-bottom:var(--sp-4)">
+          <div class="stat" style="min-width:110px">
+            <div class="stat-num" id="real-gen-done">—</div>
+            <div class="stat-label">API calls done</div>
+          </div>
+          <div class="stat" style="min-width:110px">
+            <div class="stat-num" id="real-gen-ok">—</div>
+            <div class="stat-label">responses recorded</div>
+          </div>
+          <div class="stat" style="min-width:110px">
+            <div class="stat-num" id="real-gen-eta" style="font-size:18px">—</div>
+            <div class="stat-label">ETA</div>
+          </div>
+        </div>
+        <div class="test-actions" style="flex-wrap:wrap; gap:var(--sp-3)">
+          <span id="key-openai" class="badge badge-outline">Checking…</span>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px">
+            OpenAI calls
+            <input type="number" id="openai-count" value="50" min="1" max="500"
+                   style="width:70px; padding:5px 8px; border-radius:var(--r-sm);
+                          border:1px solid var(--mp-border); background:var(--mp-card);
+                          color:var(--mp-text); font-size:14px" />
+          </label>
+          <button class="btn btn-primary btn-md" id="real-gen-btn">Generate OpenAI events</button>
+          <span class="test-hint" id="real-gen-hint"></span>
+        </div>
+      </div>
+
+      <!-- Step 2: Annotate -->
+      <div class="test-card" style="margin-bottom:var(--sp-4)">
+        <h3 style="font-size:15px; font-weight:600; margin-bottom:var(--sp-2)">
+          Step 2 — Annotate events
+        </h3>
+        <p style="font-size:13px; color:var(--mp-text-secondary); margin-bottom:var(--sp-3)">
+          Open any event in the <a href="#events">Events table</a> and assign a ground-truth
+          sensitivity label (<em>clean / low / medium / high / critical / false_positive</em>).
+          The more events you label, the better the retrained model will be.
+        </p>
+        <div style="display:flex; gap:var(--sp-6); flex-wrap:wrap">
+          <div class="stat" style="min-width:120px">
+            <div class="stat-num" id="training-annotated">—</div>
+            <div class="stat-label">annotated events</div>
+          </div>
+          <div class="stat" style="min-width:120px">
+            <div class="stat-num" id="training-coverage">—</div>
+            <div class="stat-label">coverage</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Retrain -->
+      <div class="test-card">
+        <h3 style="font-size:15px; font-weight:600; margin-bottom:var(--sp-2)">
+          Step 3 — Retrain the classifier
+        </h3>
+        <p style="font-size:13px; color:var(--mp-text-secondary); margin-bottom:var(--sp-3)">
+          Kicks off a training run using your annotated events. Takes a few minutes depending on
+          dataset size. Best val F1 updates when training completes.
+        </p>
+        <div style="display:flex; gap:var(--sp-6); flex-wrap:wrap; margin-bottom:var(--sp-4)">
+          <div class="stat" style="min-width:130px">
+            <div class="stat-num" id="training-status-text" style="font-size:18px">Idle</div>
+            <div class="stat-label">training status</div>
+          </div>
+          <div class="stat" style="min-width:130px">
+            <div class="stat-num" id="training-valf1">—</div>
+            <div class="stat-label">best val F1</div>
+          </div>
+          <div class="stat" style="min-width:130px">
+            <div class="stat-num" id="training-testf1">—</div>
+            <div class="stat-label">test F1</div>
+          </div>
+        </div>
+        <div class="test-actions">
+          <button class="btn btn-primary btn-md" id="training-start-btn">Start retraining</button>
+          <a class="btn btn-secondary btn-sm" href="/api/training/export.csv" download>Export CSV</a>
+          <span class="test-hint" id="training-hint"></span>
+        </div>
+        <pre id="training-log" class="copy-block" hidden></pre>
+      </div>
+    </section>
+
   </main>
 
   <!-- Event detail modal -->

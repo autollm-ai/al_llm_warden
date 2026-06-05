@@ -12,6 +12,8 @@ import csv
 import io
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -32,7 +34,7 @@ app = FastAPI(title="LLM Warden", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -60,6 +62,14 @@ class DomainBody(BaseModel):
 
 class DomainPatchBody(BaseModel):
     enabled: bool
+
+
+class AnnotateBody(BaseModel):
+    ground_truth_label: str | None = None
+
+
+class RealGenerateBody(BaseModel):
+    openai_count: int = 0
 
 
 class AdminPurgeBody(BaseModel):
@@ -240,6 +250,9 @@ def admin_purge(body: AdminPurgeBody) -> dict:
     affected: list[dict] = []
     error: str | None = None
     try:
+        # Commit the DELETE statements first, then VACUUM outside the transaction.
+        # VACUUM cannot run inside a transaction; running it inside the `with` block
+        # would raise an exception and roll back the deletes.
         with sqlite3.connect(_store.path, timeout=10) as conn:
             for stmt in sql_statements:
                 try:
@@ -247,8 +260,10 @@ def admin_purge(body: AdminPurgeBody) -> dict:
                     affected.append({"sql": stmt, "rowcount": cur.rowcount})
                 except sqlite3.Error as e:
                     affected.append({"sql": stmt, "error": str(e)})
-            conn.execute("VACUUM")
             conn.commit()
+        # VACUUM runs outside the transaction context on a fresh connection.
+        with sqlite3.connect(_store.path, timeout=10) as conn:
+            conn.execute("VACUUM")
     except Exception as e:
         error = str(e)
 
@@ -377,12 +392,228 @@ def events_csv(
     )
 
 
+@app.get("/api/events/export.json")
+def events_export_json(
+    min_sensitivity: float = Query(0.0, ge=0.0, le=1.0),
+    provider: str | None = None,
+    label: str | None = None,
+    limit: int = Query(100000, ge=1, le=500000),
+) -> StreamingResponse:
+    """Download all events as a JSON array for offline annotation and analysis."""
+    rows = _store.list_events(limit=limit, offset=0, provider=provider,
+                              min_sensitivity=min_sensitivity if min_sensitivity > 0 else None)
+    if label:
+        wanted = {x.strip() for x in label.split(",") if x.strip()}
+        rows = [r for r in rows if r.get("label") in wanted]
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+
+    def gen():
+        yield "[\n"
+        for i, r in enumerate(rows):
+            yield ("" if i == 0 else ",\n") + json.dumps(r, ensure_ascii=False)
+        yield "\n]\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="warden-events-{stamp}.json"'},
+    )
+
+
 @app.get("/api/events/{event_id}")
 def event_detail(event_id: int) -> dict:
     row = _store.get_event(event_id)
     if not row:
         raise HTTPException(404, "not found")
     return row
+
+
+@app.patch("/api/events/{event_id}")
+def event_annotate(event_id: int, body: AnnotateBody) -> dict:
+    """Set or clear the human ground-truth label on an event."""
+    valid = {"clean", "low", "medium", "high", "critical", "false_positive", None}
+    if body.ground_truth_label not in valid:
+        raise HTTPException(400, f"invalid label {body.ground_truth_label!r}")
+    if not _store.annotate_event(event_id, body.ground_truth_label):
+        raise HTTPException(404, "not found")
+    return {"id": event_id, "ground_truth_label": body.ground_truth_label}
+
+
+# ── Training pipeline ────────────────────────────────────────────────────────
+
+_REAL_GEN_STATUS_PATH   = Path(os.environ.get("WARDEN_MODEL_DIR", "/models")) / "real_generate_status.json"
+_TRAINING_STATUS_PATH   = Path(os.environ.get("WARDEN_MODEL_DIR", "/models")) / "training_status.json"
+_LABEL_TO_INT = {"false_positive": 0, "clean": 0, "low": 1, "medium": 1, "high": 1, "critical": 1}
+
+
+@app.get("/api/config/keys")
+def config_keys() -> dict:
+    """Return which API keys are available (booleans only, never the values)."""
+    return {
+        "has_openai": bool(os.environ.get("OPENAI_API_KEY", "").strip()),
+    }
+
+
+@app.get("/api/events/generate-real/status")
+def events_generate_real_status() -> dict:
+    """Poll progress of a running real-LLM-call generation job."""
+    if not _REAL_GEN_STATUS_PATH.exists():
+        return {"running": False, "done": 0, "total": 0, "ok": 0}
+    try:
+        return json.loads(_REAL_GEN_STATUS_PATH.read_text())
+    except Exception:
+        return {"running": False, "done": 0, "total": 0, "ok": 0}
+
+
+@app.post("/api/events/generate-real")
+def events_generate_real(body: RealGenerateBody) -> dict:
+    """Start a background job that makes real OpenAI API calls and records events.
+    Claude events are generated on the host via scripts/generate_real_traffic.py."""
+    if body.openai_count < 1:
+        raise HTTPException(400, "openai_count must be at least 1")
+    if not os.environ.get("OPENAI_API_KEY", "").strip():
+        raise HTTPException(400, "OPENAI_API_KEY not configured")
+
+    try:
+        cur = json.loads(_REAL_GEN_STATUS_PATH.read_text()) if _REAL_GEN_STATUS_PATH.exists() else {}
+        if cur.get("running"):
+            raise HTTPException(409, "real generation already running")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    cmd = [
+        sys.executable, "-m", "training.generate_real",
+        "--openai", str(body.openai_count),
+    ]
+    try:
+        proc = subprocess.Popen(cmd, cwd="/app",
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                env=dict(os.environ))
+    except Exception as e:
+        raise HTTPException(500, f"failed to start generation: {e}")
+    return {"started": True, "pid": proc.pid, "openai_count": body.openai_count}
+
+
+@app.get("/api/annotation/summary")
+def annotation_summary() -> dict:
+    """Ground-truth label distribution across all manually annotated events."""
+    import sqlite3
+    counts: dict[str, int] = {}
+    total_annotated = 0
+    try:
+        with sqlite3.connect(_store.path, timeout=10) as conn:
+            rows = conn.execute(
+                "SELECT ground_truth_label, COUNT(*) FROM events "
+                "WHERE ground_truth_label IS NOT NULL "
+                "GROUP BY ground_truth_label"
+            ).fetchall()
+            for label, n in rows:
+                counts[label] = n
+                total_annotated += n
+    except Exception:
+        pass
+    total_events = _store.summary().get("total", 0)
+    return {
+        "by_ground_truth_label": counts,
+        "annotated": total_annotated,
+        "total": total_events,
+        "coverage_pct": round(total_annotated / max(total_events, 1) * 100, 1),
+    }
+
+
+@app.get("/api/training/status")
+def training_status() -> dict:
+    """Return latest training run status and model metrics."""
+    status: dict = {"running": False, "metrics": None, "annotated_count": 0}
+    status["annotated_count"] = len(_store.annotated_for_training())
+    if _TRAINING_STATUS_PATH.exists():
+        try:
+            status.update(json.loads(_TRAINING_STATUS_PATH.read_text()))
+        except Exception:
+            pass
+    metrics_path = Path(os.environ.get("WARDEN_MODEL_DIR", "/models")) / "metrics.json"
+    if metrics_path.exists():
+        try:
+            status["metrics"] = json.loads(metrics_path.read_text())
+        except Exception:
+            pass
+    return status
+
+
+@app.post("/api/training/start")
+def training_start() -> dict:
+    """Kick off a retraining run using annotated events."""
+    try:
+        cur = json.loads(_TRAINING_STATUS_PATH.read_text()) if _TRAINING_STATUS_PATH.exists() else {}
+        if cur.get("running"):
+            raise HTTPException(409, "training already running")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    annotated = _store.annotated_for_training()
+    if not annotated:
+        raise HTTPException(400, "no annotated events — label some events in the Events table first")
+
+    real_csv_path = Path(os.environ.get("WARDEN_MODEL_DIR", "/models")) / "annotated_training.csv"
+    with open(real_csv_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["text", "label", "spans"])
+        for r in annotated:
+            text = r.get("sample") or ""
+            gtl = r.get("ground_truth_label") or "clean"
+            int_label = _LABEL_TO_INT.get(gtl, 0)
+            hits = r.get("hits") or []
+            span_list = [[h["span"][0], h["span"][1]]
+                         for h in hits if isinstance(h, dict) and h.get("span")]
+            if int_label == 1 and not span_list and text:
+                span_list = [[0, len(text)]]
+            w.writerow([text, int_label, json.dumps(span_list)])
+
+    _TRAINING_STATUS_PATH.write_text(json.dumps({"running": True, "started_at": now_iso()}))
+    cmd = [sys.executable, "-m", "training.train", "--data", str(real_csv_path), "--real-only", "--force"]
+    try:
+        proc = subprocess.Popen(cmd, cwd="/app", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        _TRAINING_STATUS_PATH.write_text(json.dumps({"running": False, "error": str(e)}))
+        raise HTTPException(500, f"failed to start training: {e}")
+    return {"started": True, "pid": proc.pid, "annotated_samples": len(annotated)}
+
+
+@app.get("/api/training/export.csv")
+def training_export_csv() -> StreamingResponse:
+    """Export annotated events as a training CSV for the LSTM."""
+    rows = _store.annotated_for_training()
+    if not rows:
+        raise HTTPException(404, "no annotated events yet")
+
+    def gen():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["text", "label", "spans"])
+        yield buf.getvalue(); buf.seek(0); buf.truncate()
+        for r in rows:
+            text = r.get("sample") or ""
+            gtl = r.get("ground_truth_label") or "clean"
+            int_label = _LABEL_TO_INT.get(gtl, 0)
+            hits = r.get("hits") or []
+            span_list = [[h["span"][0], h["span"][1]]
+                         for h in hits if isinstance(h, dict) and h.get("span")]
+            if int_label == 1 and not span_list and text:
+                span_list = [[0, len(text)]]
+            writer.writerow([text, int_label, json.dumps(span_list)])
+            yield buf.getvalue(); buf.seek(0); buf.truncate()
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
+    return StreamingResponse(
+        gen(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="warden-training-{stamp}.csv"'},
+    )
 
 
 @app.post("/api/classify")

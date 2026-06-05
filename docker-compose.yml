@@ -61,6 +61,9 @@ services:
       - WARDEN_FRONTEND_DIR=/app/frontend
       - WARDEN_TEST_MODE=${WARDEN_TEST_MODE:-0}
       - WARDEN_TEST_MODE_PATH=/data/warden-test-mode.jsonl
+      # API key for real OpenAI event generation.
+      # Set in a .env file or export before running docker compose.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8090/api/health"]

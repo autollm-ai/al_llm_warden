@@ -19,8 +19,7 @@ scores it for sensitive content **before** it leaves your laptop.
 
 ## Quick start — two commands
 
-You need Docker (Docker Desktop / Colima / Orbstack on macOS, or Docker
-Engine + the compose plugin on Linux) and `git`. That's it.
+You need Docker (Docker Desktop / Colima / Orbstack on macOS, or Docker Engine + the compose plugin on Linux, or Docker Desktop on Windows) and `git`. That's it.
 
 **macOS:**
 
@@ -40,6 +39,14 @@ docker compose up -d --build              # boots warden in the background
 bash scripts/install-linux.sh             # trusts the CA + flips the GNOME proxy
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+git clone <this-repo> al_llm_warden
+cd al_llm_warden
+powershell -ExecutionPolicy Bypass -File scripts/install-windows.ps1
+```
+
 That's it. Now open `chatgpt.com`, `claude.ai`, `gemini.google.com`, or any
 LLM tool in your normal browser — events appear at
 <http://localhost:8090>. Nothing else to configure.
@@ -49,6 +56,7 @@ To revert (turn the proxy off, remove the certificate):
 ```bash
 bash scripts/uninstall-mac.sh             # macOS
 bash scripts/uninstall-linux.sh           # Linux
+powershell -File scripts/uninstall-windows.ps1 # Windows
 docker compose down                       # add -v to also wipe the SQLite + model volumes
 ```
 

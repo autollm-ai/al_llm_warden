@@ -263,14 +263,21 @@ def train_model(
     texts = _read_csv_texts(csv_path)
     _log(f"[train] corpus size: {len(texts)} samples")
 
-    _log(f"[train] training BPE tokenizer (target vocab={vocab_size})")
-    t0 = time.time()
-    tokenizer = BPETokenizer.train(texts, vocab_size=vocab_size)
-    _log(f"[train] BPE done — vocab size {tokenizer.vocab_size} in {time.time()-t0:.0f}s")
-
     out_dir.mkdir(parents=True, exist_ok=True)
     bpe_path = out_dir / "bpe.json"
-    tokenizer.save(bpe_path)
+
+    # Reuse existing BPE tokenizer if present — retraining is O(n²×vocab)
+    # and takes hours on large corpora.  The vocabulary is stable across runs.
+    if bpe_path.exists():
+        _log(f"[train] reusing existing BPE tokenizer ({bpe_path})")
+        tokenizer = BPETokenizer.load(str(bpe_path))
+        _log(f"[train] vocab size: {tokenizer.vocab_size}")
+    else:
+        _log(f"[train] training BPE tokenizer (target vocab={vocab_size})")
+        t0 = time.time()
+        tokenizer = BPETokenizer.train(texts, vocab_size=vocab_size)
+        _log(f"[train] BPE done — vocab size {tokenizer.vocab_size} in {time.time()-t0:.0f}s")
+        tokenizer.save(bpe_path)
 
     blob = _tokenize_dataset(csv_path, tokenizer, out_dir / "tokenized_cache.pt")
     n = blob["ids"].shape[0]
@@ -390,9 +397,25 @@ def train_model(
     return metrics
 
 
+def _merge_csvs(synth: Path, real: Path, out: Path) -> None:
+    """Merge synthetic + real-annotated CSVs, shuffle, write to out."""
+    rows: list[dict] = []
+    for p in (synth, real):
+        with p.open(encoding="utf-8") as f:
+            rows.extend(csv.DictReader(f))
+    random.shuffle(rows)
+    with out.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=["text", "label", "spans"])
+        w.writeheader()
+        w.writerows(rows)
+    _log(f"[train] merged {len(rows)} rows ({synth.name} + {real.name}) → {out}")
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--data", type=Path, default=None)
+    p.add_argument("--real-data", type=Path, default=None,
+                   help="CSV of real annotated events; merged with synthetic data before training")
     p.add_argument("--out", type=Path,
                    default=Path(os.environ.get("WARDEN_MODEL_DIR", "/models")))
     p.add_argument("--n-samples", type=int, default=8000)
@@ -401,6 +424,8 @@ def main() -> None:
     p.add_argument("--batch-size", type=int, default=64)
     p.add_argument("--lr", type=float, default=2e-3)
     p.add_argument("--seed", type=int, default=7)
+    p.add_argument("--real-only", action="store_true",
+                   help="Skip synthetic data generation; use --data as the sole training source")
     p.add_argument("--force", action="store_true")
     p.add_argument("--wandb", dest="wandb", action="store_true",
                    default=os.environ.get("WARDEN_WANDB", "0") == "1")
@@ -414,10 +439,22 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = args.data or (out_dir / "training_data.csv")
 
-    if args.force or not csv_path.exists():
+    if args.real_only:
+        if not csv_path.exists():
+            _log(f"[train] --real-only set but {csv_path} not found — aborting")
+            return
+        _log(f"[train] real-only mode — using {csv_path} (no synthetic data)")
+    elif args.force or not csv_path.exists():
         generate_data.generate(args.n_samples, csv_path, seed=args.seed)
     else:
         _log(f"[train] reusing existing dataset {csv_path}")
+
+    if args.real_data and args.real_data.exists():
+        merged_path = out_dir / "merged_training_data.csv"
+        _merge_csvs(csv_path, args.real_data, merged_path)
+        csv_path = merged_path
+    elif args.real_data:
+        _log(f"[train] --real-data {args.real_data} not found, skipping merge")
 
     if (
         not args.force
