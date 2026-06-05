@@ -42,6 +42,7 @@ _store = EventStore()
 _identity = IdentityMemory()
 _tok_path, _model_path = _cls.default_paths()
 _classifier = _cls.Classifier.from_paths(_tok_path, _model_path)
+_classifier_lock = __import__("threading").Lock()
 _domain_store = DomainStore()
 _domain_store.ensure_seeded(_domains.SHADOW_AI_DOMAINS)
 
@@ -584,6 +585,19 @@ def training_start() -> dict:
     return {"started": True, "pid": proc.pid, "annotated_samples": len(annotated)}
 
 
+@app.post("/api/training/reload")
+def training_reload() -> dict:
+    """Hot-reload the classifier from the latest model files without restarting."""
+    global _classifier
+    tok_path, model_path = _cls.default_paths()
+    if not Path(tok_path).exists() or not Path(model_path).exists():
+        raise HTTPException(404, "model files not found — run training first")
+    with _classifier_lock:
+        _classifier = _cls.Classifier.from_paths(tok_path, model_path)
+    tier2 = _classifier.model is not None
+    return {"reloaded": True, "tier2_enabled": tier2}
+
+
 @app.get("/api/training/export.csv")
 def training_export_csv() -> StreamingResponse:
     """Export annotated events as a training CSV for the LSTM."""
@@ -618,7 +632,9 @@ def training_export_csv() -> StreamingResponse:
 
 @app.post("/api/classify")
 def classify(body: ClassifyBody) -> dict:
-    return _classifier.classify(body.text).to_dict()
+    with _classifier_lock:
+        clf = _classifier
+    return clf.classify(body.text).to_dict()
 
 
 # ── Static frontend ──────────────────────────────────────────────────────────

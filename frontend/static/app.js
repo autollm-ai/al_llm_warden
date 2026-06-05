@@ -886,11 +886,13 @@ async function loadTrainingStatus() {
     if (coverageEl) coverageEl.textContent = (ann.coverage_pct ?? 0) + "%";
   } catch { /* ignore */ }
 
+  const reloadBtn = $("#training-reload-btn");
   if (statusEl) {
     statusEl.textContent = s.running
       ? "Training…"
       : (s.finished_at ? `Done ${formatTime(s.finished_at)}` : "Idle");
   }
+  if (reloadBtn) reloadBtn.hidden = !(s.finished_at && !s.running);
 
   const m = s.metrics || {};
   const td = m.test_doc || {};
@@ -902,6 +904,25 @@ async function loadTrainingStatus() {
       ? "Label some events in the Events table first."
       : (s.running ? "Training in progress — refresh in a few minutes." : "");
   }
+}
+
+const trainingReloadBtn = $("#training-reload-btn");
+if (trainingReloadBtn) {
+  trainingReloadBtn.addEventListener("click", async () => {
+    trainingReloadBtn.disabled = true;
+    trainingReloadBtn.textContent = "Reloading…";
+    try {
+      const r = await api("/api/training/reload", { method: "POST", body: JSON.stringify({}) });
+      const hint = $("#training-hint");
+      if (hint) hint.textContent = `Model reloaded — tier-2 ${r.tier2_enabled ? "enabled" : "disabled (model missing)"}.`;
+      trainingReloadBtn.hidden = true;
+    } catch (err) {
+      alert("Reload failed: " + err.message);
+    } finally {
+      trainingReloadBtn.disabled = false;
+      trainingReloadBtn.textContent = "Reload model";
+    }
+  });
 }
 
 const trainingStartBtn = $("#training-start-btn");
