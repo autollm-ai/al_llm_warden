@@ -19,3 +19,6 @@ models/training_data.csv
 .env.local
 
 mitmproxy-ca.pem
+
+# Stats exports produced by the push-stats skill
+warden-stats-*.csv
