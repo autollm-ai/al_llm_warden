@@ -34,7 +34,7 @@ app = FastAPI(title="LLM Warden", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -128,7 +128,7 @@ def identity() -> dict:
     return {"signals": masked}
 
 
-@app.delete("/api/identity/{kind}/{value:path}")
+@app.post("/api/identity/{kind}/{value:path}")
 def identity_forget(kind: str, value: str) -> dict:
     """Manually retract a qualified user-identity value."""
     if kind not in ("email", "ip"):
@@ -157,16 +157,13 @@ def domains_add(body: DomainBody) -> dict:
     return row
 
 
-@app.delete("/api/domains/{host}")
-def domains_remove(host: str) -> dict:
-    if not _domain_store.remove(host):
-        raise HTTPException(404, f"no domain {host!r}")
-    _domains.invalidate_cache()
-    return {"deleted": True, "host": host}
-
-
-@app.patch("/api/domains/{host}")
-def domains_patch(host: str, body: DomainPatchBody) -> dict:
+@app.post("/api/domains/{host}")
+def domains_update(host: str, body: DomainPatchBody | None = None) -> dict:
+    if body is None:
+        if not _domain_store.remove(host):
+            raise HTTPException(404, f"no domain {host!r}")
+        _domains.invalidate_cache()
+        return {"deleted": True, "host": host}
     if not _domain_store.set_enabled(host, body.enabled):
         raise HTTPException(404, f"no domain {host!r}")
     _domains.invalidate_cache()
@@ -426,7 +423,7 @@ def event_detail(event_id: int) -> dict:
     return row
 
 
-@app.patch("/api/events/{event_id}")
+@app.post("/api/events/{event_id}")
 def event_annotate(event_id: int, body: AnnotateBody) -> dict:
     """Set or clear the human ground-truth label on an event."""
     valid = {"clean", "low", "medium", "high", "critical", "false_positive", None}

@@ -102,7 +102,7 @@ document.addEventListener("click", async (e) => {
   btn.disabled = true; btn.textContent = "Evicting…";
   try {
     const res = await fetch(`/api/identity/${encodeURIComponent(kind)}/${encodeURIComponent(value)}`,
-                            { method: "DELETE" });
+                            { method: "POST" });
     if (!res.ok) {
       let msg = `HTTP ${res.status}`;
       try { const j = await res.json(); if (j.detail) msg += ` — ${j.detail}`; } catch {}
@@ -346,7 +346,7 @@ async function loadDomains() {
       const host = e.target.closest("tr").dataset.host;
       try {
         const res = await fetch(`/api/domains/${encodeURIComponent(host)}`, {
-          method: "PATCH",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ enabled: e.target.checked }),
         });
@@ -367,7 +367,7 @@ async function loadDomains() {
       }
       btn.disabled = true; btn.textContent = "Removing…";
       try {
-        const res = await fetch(`/api/domains/${encodeURIComponent(host)}`, { method: "DELETE" });
+        const res = await fetch(`/api/domains/${encodeURIComponent(host)}`, { method: "POST" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch (err) {
         alert("Remove failed: " + err.message);
@@ -631,7 +631,7 @@ document.addEventListener("click", async (e) => {
   btn.disabled = true;
   try {
     await api(`/api/events/${eventId}`, {
-      method: "PATCH",
+      method: "POST",
       body: JSON.stringify({ ground_truth_label: label }),
     });
     container.querySelectorAll(".annotate-btn").forEach(b => {
